@@ -33,6 +33,7 @@ export const CONFIG = {
   penalties: { overloadRsPerKwSlot: 1.45 },
   forecast: {
     // Band grows with horizon: sigma(t) = baseBandKw * (1 + horizonGrowth * t/stepsPerDay)
+    z: 1.28,
     baseBandKw: 350,
     horizonGrowth: 1.0,
   },
@@ -65,6 +66,7 @@ export const PROVENANCE = {
   'tariff.middayFromHour': P, 'tariff.middayToHour': P,
   'tariff.legacyScaleFactor': `${P} (legacy)`,
   'penalties.overloadRsPerKwSlot': `${P} (1450 Rs/MW inline)`,
+  'forecast.z': `${P} (forecast band multiplier)`,
   'forecast.baseBandKw': `${P} (0.35 MW inline)`, 'forecast.horizonGrowth': P,
   'uncertaintyReserve.gain': P, 'uncertaintyReserve.maxExtraSoc': P,
   'loss.formula': 'Spec §21', 'loss.label': 'Spec §21',

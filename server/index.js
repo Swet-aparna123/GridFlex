@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { CONFIG } from '../src/engine/config.js';
 import { SCENARIOS, solveGridFlex } from '../src/engine/gridflexEngine.js';
+import { forecast, runBaselines, computeAllKpis } from '../src/analytics/index.js';
 
 const port = Number(process.env.GRIDFLEX_API_PORT || 4174);
 const maxRequestBytes = 16 * 1024;
@@ -60,11 +61,55 @@ function validateRequest(payload) {
   return { scenarioId, batteryEnabled, participationRate, batteryInitialSoC, feederCapacityMW: CONFIG.feeder.limitKw / 1000 };
 }
 
+function solveAnalyticsStrategy(params) {
+  const result = solveGridFlex({ ...params, includeStrategyBaselines: false });
+  const plan = result.dispatchPlan;
+  const solarKw = result.timeSeries.map((slot) => slot.solarGen * 1000);
+  const curtailedKw = result.timeSeries.map((slot) => slot.solarCurtailmentMW * 1000);
+  return {
+    netKw: plan.netAfter,
+    solarKw,
+    solarUsedKw: solarKw.map((availableKw, step) => Math.max(0, availableKw - curtailedKw[step])),
+    batteryDischargeKw: plan.battery.dischargeKw,
+    shiftedKwh: [plan.metrics.shiftedKwh],
+    unservedKwh: [plan.metrics.unservedKwh],
+  };
+}
+
 const server = createServer(async (request, response) => {
   const pathname = new URL(request.url, 'http://localhost').pathname;
 
   if (request.method === 'GET' && pathname === '/api/health') {
     sendJson(response, 200, { status: 'ok', service: 'gridflex-local-engine' });
+    return;
+  }
+
+  if (request.method === 'POST' && pathname === '/api/analytics') {
+    try {
+      const payload = await readJson(request);
+      const input = validateRequest(payload);
+      if (!Array.isArray(payload.historyKw) || payload.historyKw.some((value) => !Number.isFinite(value))) {
+        throw Object.assign(new Error('historyKw must be an array of finite kW values.'), { statusCode: 400 });
+      }
+      if (payload.historyKw.length < CONFIG.timing.stepsPerDay * 2) {
+        throw Object.assign(new Error(`historyKw must contain at least ${CONFIG.timing.stepsPerDay * 2} values.`), { statusCode: 400 });
+      }
+      const forecastResult = forecast({ historyKw: payload.historyKw });
+      const baselines = runBaselines(solveAnalyticsStrategy, {
+        ...input,
+        seed: payload.seed,
+        forecast: forecastResult,
+        forecastBandKw: forecastResult.maxBandKw,
+      });
+      const kpis = computeAllKpis(baselines, {
+        limitKw: CONFIG.feeder.limitKw,
+        stepHours: CONFIG.timing.stepHours,
+        usableBatteryKwh: CONFIG.battery.capacityKwh * (CONFIG.battery.maxSoc - CONFIG.battery.minReserveSoc),
+      });
+      sendJson(response, 200, { forecast: forecastResult, kpis });
+    } catch (error) {
+      sendJson(response, error.statusCode || 500, { error: error.message || 'GridFlex analytics failed.' });
+    }
     return;
   }
 

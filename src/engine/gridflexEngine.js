@@ -1,6 +1,7 @@
 import { CONFIG, LOAD_ARCHETYPES } from "./config.js";
 import { makeLoad } from "./loads.js";
-import { optimize } from "./dispatch.js";
+import { effectiveReserveSoc, optimize } from "./dispatch.js";
+import { buildStrategyBaselines, calculateKpis, forecast as createForecast } from "../analytics/index.js";
 
 export const TIME_LABELS = Array.from({ length: CONFIG.timing.stepsPerDay }, (_, step) => {
   const hour = Math.floor(step / 2);
@@ -73,34 +74,35 @@ export function generateRawProfiles(scenarioId) {
 const max = (series) => Math.max(...series);
 const round = (value, digits = 3) => Number(value.toFixed(digits));
 
-function tariffAt(step) {
-  const hour = step / 2;
-  if (hour >= CONFIG.tariff.peakFromHour && hour <= CONFIG.tariff.peakToHour) return CONFIG.tariff.peakRsPerKwh;
-  if (hour >= CONFIG.tariff.middayFromHour && hour <= CONFIG.tariff.middayToHour) return CONFIG.tariff.middayRsPerKwh;
-  return CONFIG.tariff.offPeakRsPerKwh;
-}
-
-function costFor(netKw, limitKw) {
-  return netKw.reduce((total, load, step) => {
-    const energyCost = Math.max(0, load) * CONFIG.timing.stepHours * (tariffAt(step) / 10);
-    const overloadPenalty = Math.max(0, load - limitKw) * CONFIG.penalties.overloadRsPerKwSlot;
-    return total + energyCost + overloadPenalty;
-  }, 0);
-}
-
 function voltageAt(netMw, capacityMw) {
   return 1 - (netMw / capacityMw - 0.5) * 0.138;
 }
 
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function syntheticHistory(baselineNetKw, scenarioId, days = 7) {
+  const seed = [...scenarioId].reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 7);
+  const random = seededRandom(seed);
+  return Array.from({ length: days }, () => baselineNetKw.map((value) => {
+    const noiseKw = (random() - 0.5) * 100;
+    return Number((value + noiseKw).toFixed(3));
+  })).flat();
+}
+
 function solveCore({
   scenarioId, batteryEnabled, participationRate, batteryInitialSoC,
-  feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled,
+  feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled, forecastBandKw,
 }) {
   const profile = generateRawProfiles(scenarioId);
   const stepCount = CONFIG.timing.stepsPerDay;
   const dt = CONFIG.timing.stepHours;
   const capacityKwh = batteryCapacityMWh * 1000;
-  const limitKw = feederCapacityMW * 1000;
   const voltagePlanningLimitKw = feederCapacityMW * CONFIG.feeder.plannedLoadingFraction * 1000;
   const kw = (series) => series.map((value) => value * 1000);
   const baselineEv = kw(profile.evDemand);
@@ -126,8 +128,12 @@ function solveCore({
     }),
   ];
 
-  const uncertainty = (step) => CONFIG.forecast.baseBandKw * (1 + CONFIG.forecast.horizonGrowth * step / stepCount);
-  const maxBandKw = uncertainty(stepCount - 1);
+  const historyBaselineNetKw = profile.baseLoad.map((base, step) =>
+    (base + profile.evDemand[step] + profile.hvacDemand[step] + profile.agDemand[step] - profile.solarGen[step]) * 1000,
+  );
+  const forecastResult = createForecast({ historyKw: syntheticHistory(historyBaselineNetKw, scenarioId) });
+  const dispatchBandKw = forecastBandKw ?? forecastResult.maxBandKw;
+  const reserveSoc = effectiveReserveSoc(dispatchBandKw, voltagePlanningLimitKw);
   const battery = {
     ...CONFIG.battery,
     enabled: batteryEnabled,
@@ -144,7 +150,7 @@ function solveCore({
       batteryEnabled,
       loadShiftEnabled,
       participationRate: Math.max(0, Math.min(100, participationRate)) / 100,
-      forecastBandKw: maxBandKw,
+      forecastBandKw: dispatchBandKw,
       initialSocKwh: batteryInitialSoC / 100 * capacityKwh,
       allowAdvance: true,
     },
@@ -167,9 +173,6 @@ function solveCore({
   const optimizedNetMw = netAfterKw.map((value) => value / 1000);
   const baselineVoltage = baselineNetMw.map((value) => voltageAt(value, feederCapacityMW));
   const optimizedVoltage = optimizedNetMw.map((value) => voltageAt(value, feederCapacityMW));
-  const baselinePeakMw = max(baselineNetMw);
-  const optPeakMw = max(optimizedNetMw);
-  const baselineOverload = Math.max(0, baselinePeakMw - feederCapacityMW);
   const optimizedOverload = Math.max(0, max(optimizedNetMw) - feederCapacityMW);
   const initialKwh = batteryInitialSoC / 100 * capacityKwh;
   const timeSeries = Array.from({ length: stepCount }, (_, step) => {
@@ -178,7 +181,6 @@ function solveCore({
     const hvacSetback = baselineHvac[step] - schedule("neighbourhood-cooling");
     const agReschedule = baselineAg[step] - schedule("neighbourhood-pumps");
     const bessPower = plan.battery.dischargeKw[step] - plan.battery.chargeKw[step];
-    const bandMw = uncertainty(step) / 1000;
     const baseVoltage = baselineVoltage[step];
     const optVoltage = optimizedVoltage[step];
     const baseMw = baselineNetMw[step];
@@ -189,7 +191,10 @@ function solveCore({
       solarCurtailmentMW: round(solarCurtailmentKw[step] / 1000, 2),
       hvacDemand: profile.hvacDemand[step],
       baselineNetLoad: round(baseMw, 2), optNetLoad: round(optMw, 2),
-      uncertaintyUpper: round(baseMw + bandMw, 2), uncertaintyLower: round(Math.max(0, baseMw - bandMw), 2),
+      forecastNetLoad: round(forecastResult.forecastKw[step] / 1000, 2),
+      uncertaintyUpper: round(forecastResult.upperKw[step] / 1000, 2),
+      uncertaintyLower: round(forecastResult.lowerKw[step] / 1000, 2),
+      uncertaintyBandMW: round((forecastResult.upperKw[step] - forecastResult.lowerKw[step]) / 1000, 2),
       feederLimit: feederCapacityMW,
       baselineVoltage: round(baseVoltage), optVoltage: round(optVoltage),
       voltageMinLimit: 0.95, voltageMaxLimit: 1.05,
@@ -205,8 +210,6 @@ function solveCore({
     };
   });
 
-  const baselineDailyCost = costFor(baselineNetKw, limitKw);
-  const optimizedDailyCost = costFor(netAfterKw, limitKw);
   const constraintChecks = plan.validation.checks;
   const maxOptimizedVoltage = max(optimizedVoltage);
   const minOptimizedVoltage = Math.min(...optimizedVoltage);
@@ -220,28 +223,25 @@ function solveCore({
   };
   const logs = [
     { step: "1. TELEMETRY AUDIT", msg: `Loaded 24-hour synthetic feeder profile for ${SCENARIOS[scenarioId].name}.` },
-    { step: "2. RISK DETECTION", msg: `Measured demand minus solar against the ${feederCapacityMW.toFixed(1)} MW feeder rating and planning limit.` },
+    { step: "2. RISK DETECTION", msg: `Forecasted from seven days of simulated history and checked against the ${feederCapacityMW.toFixed(1)} MW feeder rating.` },
     { step: "3. DISPATCH OPTIMIZATION", msg: "Scheduled flexible loads within participation, rated-power, time-window, deadline, and tank constraints." },
     { step: "4. CONSTRAINT CHECK", msg: plan.validation.allHardConstraintsPass ? "Load and battery hard-constraint checks pass." : "At least one load or battery hard-constraint check failed." },
     { step: "5. PLAN DISPATCH", msg: "Measured the resulting time series, remaining feeder violations, and response costs." },
   ];
+  const kpis = calculateKpis({
+    baselineNetKw,
+    optimizedNetKw: netAfterKw,
+    baselineVoltage,
+    optimizedVoltage,
+    feederCapacityMW,
+    plan,
+    timeSeries,
+  });
 
   return {
     timeSeries, logs, protectionSummary,
-    kpis: {
-      baselinePeakMW: round(baselinePeakMw, 2), optPeakMW: round(optPeakMw, 2),
-      peakShavedMW: baselineOverload > 0 ? round(baselinePeakMw - optPeakMw, 2) : 0,
-      peakShavedPct: baselineOverload > 0 && baselinePeakMw > 0 ? round((baselinePeakMw - optPeakMw) / baselinePeakMw * 100, 1) : 0,
-      dailySavingsRs: Math.round(baselineDailyCost - optimizedDailyCost),
-      co2SavedTons: null, capexDeferralLakhs: null,
-      baselineDailyCostRs: Math.round(baselineDailyCost), optimizedDailyCostRs: Math.round(optimizedDailyCost),
-      totalBessDischargedMWh: round(plan.metrics.batteryDischargedKwh / 1000, 2),
-      totalShiftedLoadMWh: round(plan.metrics.shiftedKwh / 1000, 2),
-      baselineMaxOverloadMW: round(baselineOverload, 2), optimizedMaxOverloadMW: round(optimizedOverload, 2),
-      optimizedViolationCount: timeSeries.filter((slot) => slot.hasViolation).length,
-      baselineMinVoltage: round(Math.min(...baselineVoltage)), baselineMaxVoltage: round(max(baselineVoltage)),
-      optimizedMinVoltage: round(minOptimizedVoltage),
-    },
+    forecast: { ...forecastResult, dataMode: "simulated", reserveSoc, dispatchBandKw },
+    kpis,
     dispatchPlan: plan,
   };
 }
@@ -253,44 +253,27 @@ export function solveGridFlex({
   feederCapacityMW = CONFIG.feeder.limitKw / 1000,
   batteryCapacityMWh = CONFIG.battery.capacityKwh / 1000,
   batteryMaxPowerMW = CONFIG.battery.maxDischargeKw / 1000,
-  loadShiftEnabled = true, includeStrategyBaselines = true,
+  loadShiftEnabled = true, includeStrategyBaselines = true, forecastBandKw,
 } = {}) {
   if (!SCENARIOS[scenarioId]) throw new Error(`Unknown scenario: ${scenarioId}`);
+  if (forecastBandKw != null && (!Number.isFinite(forecastBandKw) || forecastBandKw < 0)) {
+    throw new RangeError('forecastBandKw must be a finite non-negative kW value.');
+  }
 
   const result = solveCore({
     scenarioId, batteryEnabled, participationRate, batteryInitialSoC,
-    feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled,
+    feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled, forecastBandKw,
   });
   if (!includeStrategyBaselines) return result;
-
-  const baselineOptions = [
-    ["1. Do Nothing (Unmanaged Base)", { batteryEnabled: false, participationRate: 0, loadShiftEnabled: false }, "#f87171"],
-    ["2. Battery-Only (BESS Alone)", { batteryEnabled: true, participationRate: 0, loadShiftEnabled: false }, "#fbbf24"],
-    ["3. Load-Shift-Only (DR Alone)", { batteryEnabled: false, participationRate, loadShiftEnabled: true }, "#fbbf24"],
-  ];
-  const strategyBaselines = baselineOptions.map(([name, options, color]) => {
-    const baseline = solveCore({ scenarioId, batteryInitialSoC, feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, ...options });
-    const { kpis, protectionSummary } = baseline;
-    const safe = protectionSummary.thermalCompliant && protectionSummary.voltageCompliant && protectionSummary.batterySoCCompliant && protectionSummary.slaCompliant;
-    return {
-      name,
-      overload: kpis.optimizedMaxOverloadMW > 0 ? `+${kpis.optimizedMaxOverloadMW.toFixed(2)} MW Overload` : "0.00 MW Overload",
-      minVoltage: `${kpis.optimizedMinVoltage.toFixed(3)} p.u.`,
-      violations: `${kpis.optimizedViolationCount} Breaches`,
-      cost: `₹${kpis.optimizedDailyCostRs.toLocaleString("en-IN")}/day`,
-      status: safe ? "SAFE" : "INFEASIBLE",
-      color,
-    };
-  });
-  const safe = result.protectionSummary.thermalCompliant && result.protectionSummary.voltageCompliant && result.protectionSummary.batterySoCCompliant && result.protectionSummary.slaCompliant;
-  strategyBaselines.push({
-    name: "4. GridFlex Configured Plan",
-    overload: result.kpis.optimizedMaxOverloadMW > 0 ? `+${result.kpis.optimizedMaxOverloadMW.toFixed(2)} MW Overload` : "0.00 MW Overload",
-    minVoltage: `${result.kpis.optimizedMinVoltage.toFixed(3)} p.u.`,
-    violations: `${result.kpis.optimizedViolationCount} Breaches`,
-    cost: `₹${result.kpis.optimizedDailyCostRs.toLocaleString("en-IN")}/day`,
-    status: safe ? "SAFE" : "INFEASIBLE",
-    color: "#34d399",
+  const strategyBaselines = buildStrategyBaselines({
+    solveCore,
+    scenarioId,
+    participationRate,
+    batteryInitialSoC,
+    feederCapacityMW,
+    batteryCapacityMWh,
+    batteryMaxPowerMW,
+    result,
   });
   return { ...result, strategyBaselines };
 }

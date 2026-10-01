@@ -45,7 +45,7 @@ export default function ForecastSection({ scenarioId, engineData }) {
             </h2>
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Predictive time-series model with 95% confidence prediction interval bands identifying upcoming feeder overload & voltage sag.
+            Seasonal-naive forecast with a historical variability band, highlighting likely feeder overload and voltage sag.
           </p>
         </div>
 
@@ -62,7 +62,7 @@ export default function ForecastSection({ scenarioId, engineData }) {
         <div style={{ background: 'var(--bg-panel-nested)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-heading)' }}>
-              Feeder Net Demand Forecast (with 95% Confidence Interval Shading)
+              Feeder Net Demand Forecast (with historical variability band)
             </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 700 }}>Feeder Rating: 4.2 MW (4,200 kW)</span>
           </div>
@@ -95,15 +95,16 @@ export default function ForecastSection({ scenarioId, engineData }) {
                   />
                 )}
                 <XAxis dataKey="time" stroke="var(--chart-axis)" fontSize={11} interval={5} />
-                <YAxis stroke="var(--chart-axis)" fontSize={11} domain={[0, 6]} />
+                <YAxis stroke="var(--chart-axis)" fontSize={11} domain={['auto', 'auto']} />
                 <Tooltip content={<CustomTooltip />} />
                 <ReferenceLine y={4.2} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={2} label={{ value: 'Feeder Limit: 4.2 MW (4,200 kW)', fill: '#ef4444', fontSize: 11, fontWeight: 700, position: 'insideTopRight', dy: 8, dx: -10 }} />
                 
-                {/* 95% Confidence Band Area */}
-                <Area type="monotone" dataKey="uncertaintyUpper" name="Upper 95% Bound" stroke="none" fill="url(#colorUncertainty)" unit="MW" />
+                {/* Stacked areas shade the space between the forecast bounds. */}
+                <Area type="monotone" dataKey="uncertaintyLower" stackId="forecast-band" name="Lower Forecast Bound" stroke="none" fill="transparent" fillOpacity={0} unit="MW" />
+                <Area type="monotone" dataKey="uncertaintyBandMW" stackId="forecast-band" name="Forecast Variability Band" stroke="none" fill="url(#colorUncertainty)" unit="MW" />
                 
                 <Area type="monotone" dataKey="solarGen" name="Solar Gen" stroke="#f59e0b" fillOpacity={0.2} fill="#f59e0b" unit="MW" />
-                <Area type="monotone" dataKey="baselineNetLoad" name="Predicted Net Load" stroke="#ef4444" strokeWidth={2.8} fillOpacity={1} fill="url(#colorBaseline)" unit="MW" />
+                <Area type="monotone" dataKey="forecastNetLoad" name="Seasonal-Naive Forecast" stroke="#ef4444" strokeWidth={2.8} fillOpacity={1} fill="url(#colorBaseline)" unit="MW" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

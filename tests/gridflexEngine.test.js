@@ -50,3 +50,20 @@ test('solar surge uses curtailment to keep modeled voltage within bounds', () =>
   assert.equal(result.protectionSummary.voltageCompliant, true);
   assert.equal(result.kpis.optimizedViolationCount, 0);
 });
+
+test('an explicit forecast band controls the dispatch reserve', () => {
+  const lowBand = solveGridFlex({
+    scenarioId: 'evening_peak',
+    forecastBandKw: 100,
+    includeStrategyBaselines: false,
+  });
+  const highBand = solveGridFlex({
+    scenarioId: 'evening_peak',
+    forecastBandKw: 600,
+    includeStrategyBaselines: false,
+  });
+
+  assert.equal(lowBand.forecast.dispatchBandKw, 100);
+  assert.equal(highBand.forecast.dispatchBandKw, 600);
+  assert.ok(highBand.forecast.reserveSoc > lowBand.forecast.reserveSoc);
+});
