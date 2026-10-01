@@ -3,8 +3,6 @@ import { Battery, Sun, Car, Wind, Droplets, Zap, Info } from 'lucide-react';
 
 export default function FeederTopology({ 
   batteryEnabled, 
-  participationRate, 
-  currentScenario,
   isOptimized,
   engineData
 }) {

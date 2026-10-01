@@ -3,6 +3,22 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceL
 import { SCENARIOS } from '../engine/gridflexEngine';
 import { AlertTriangle, ShieldAlert, Info } from 'lucide-react';
 
+function CustomTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div style={{ background: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--tooltip-text)', boxShadow: 'var(--shadow-card)' }}>
+      <div style={{ fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px' }}>Time: {label}</div>
+      {payload.map((entry, index) => (
+        <div key={`item-${index}`} style={{ color: entry.color, display: 'flex', justifyContent: 'space-between', gap: '12px', margin: '2px 0' }}>
+          <span>{entry.name}:</span>
+          <span style={{ fontWeight: 600 }}>{entry.value} {entry.unit || 'MW'}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ForecastSection({ scenarioId, engineData }) {
   const scenario = SCENARIOS[scenarioId];
   const { timeSeries, kpis } = engineData;
@@ -13,24 +29,6 @@ export default function ForecastSection({ scenarioId, engineData }) {
   if (kpis.baselineMaxVoltage > 1.05) baselineViolations.push(`High voltage: ${kpis.baselineMaxVoltage} p.u. above 1.050 p.u. limit`);
   const baselineHasViolation = baselineViolations.length > 0;
   if (baselineViolations.length === 0) baselineViolations.push('No modeled thermal or voltage limit breach in the baseline profile.');
-
-  // Custom Tooltip with uncertainty bounds
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{ background: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--tooltip-text)', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px' }}>Time: {label}</div>
-          {payload.map((entry, index) => (
-            <div key={`item-${index}`} style={{ color: entry.color, display: 'flex', justifyContent: 'space-between', gap: '12px', margin: '2px 0' }}>
-              <span>{entry.name}:</span>
-              <span style={{ fontWeight: 600 }}>{entry.value} {entry.unit || 'MW'}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div id="forecast-section" className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>

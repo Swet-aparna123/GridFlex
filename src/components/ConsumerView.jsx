@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Home, Car, Sun, Wind, DollarSign, ShieldCheck, AlertCircle, Zap, CheckCircle2, Clock, Users, Leaf, ArrowRight } from 'lucide-react';
+import { Home, Car, Sun, Wind, DollarSign, AlertCircle, Zap, CheckCircle2, Users } from 'lucide-react';
 
 export default function ConsumerView({ participationRate, setParticipationRate }) {
   const [optedOut, setOptedOut] = useState(false);
-  const [maxTempFloat, setMaxTempFloat] = useState(1.5);
-  const [evGuaranteeTime, setEvGuaranteeTime] = useState('07:00 AM');
+  const maxTempFloat = 1.5;
+  const evGuaranteeTime = '07:00 AM';
 
   const handleOptOutToggle = () => {
     const nextState = !optedOut;

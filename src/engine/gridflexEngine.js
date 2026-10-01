@@ -1,411 +1,296 @@
-/**
- * GridFlex — AI Feeder Decision Engine
- * Core Simulation & Optimization Solver
- */
+import { CONFIG, LOAD_ARCHETYPES } from "./config.js";
+import { makeLoad } from "./loads.js";
+import { optimize } from "./dispatch.js";
 
-// Time slots: 24 hours in 30-minute intervals (48 points)
-export const TIME_LABELS = Array.from({ length: 48 }, (_, i) => {
-  const hour = Math.floor(i / 2);
-  const min = i % 2 === 0 ? '00' : '30';
-  return `${String(hour).padStart(2, '0')}:${min}`;
+export const TIME_LABELS = Array.from({ length: CONFIG.timing.stepsPerDay }, (_, step) => {
+  const hour = Math.floor(step / 2);
+  return `${String(hour).padStart(2, "0")}:${step % 2 === 0 ? "00" : "30"}`;
 });
 
 export const SCENARIOS = {
   normal: {
-    id: 'normal',
-    name: 'Normal Feeder Operation',
-    badge: 'NORMAL OPERATING CONDITIONS',
-    description: 'Baseline feeder demand and solar generation remain within the modeled thermal and voltage limits.',
-    riskTimeWindow: 'No active risk window',
-    riskType: 'Normal Operation',
-    severity: 'NORMAL',
-    baselineViolations: [],
+    id: "normal", name: "Normal Feeder Operation", badge: "NORMAL OPERATING CONDITIONS",
+    description: "Baseline feeder demand and solar generation remain within modeled limits.",
+    riskTimeWindow: "No active risk window", riskType: "Normal Operation", severity: "NORMAL", baselineViolations: [],
   },
   cloud_event: {
-    id: 'cloud_event',
-    name: 'Cloud Event (Sudden Solar Drop)',
-    badge: '🌦️ Midday Ramp Emergency',
-    description: 'A sudden midday solar drop coincides with elevated commercial demand, creating a sharp net-load ramp in the forecast window.',
-    riskTimeWindow: '12:30 - 14:30',
-    riskType: 'Voltage Sag & Steep Power Ramp',
-    severity: 'HIGH',
-    baselineViolations: ['Transformer Thermal Overload (130% / +1.25 MW Gap)', 'Substation Voltage Sag (0.891 p.u. < 0.950 limit)', 'Steep PV Ramp (-2.3 MW in 30m)'],
+    id: "cloud_event", name: "Cloud Event (Sudden Solar Drop)", badge: "Midday Ramp Emergency",
+    description: "A sudden midday solar drop coincides with elevated commercial demand.",
+    riskTimeWindow: "12:30 - 14:30", riskType: "Thermal Overload & Power Ramp", severity: "HIGH", baselineViolations: [],
   },
   evening_peak: {
-    id: 'evening_peak',
-    name: 'Evening Peak (EV + Domestic Surge)',
-    badge: '🚨 Sunset Surge Peak (Alert Mode)',
-    description: 'Unmanaged residential EV charging and cooling load rise as solar generation falls through the evening peak window.',
-    riskTimeWindow: '18:00 - 21:30',
-    riskType: 'Thermal Overload & Feeder Capacity Breach',
-    severity: 'CRITICAL ALERT',
-    baselineViolations: ['Transformer Thermal Overload (130% / +1.25 MW Gap)', 'Substation Low Voltage Sag (0.891 p.u. < 0.950 limit)', 'Coincident Unmanaged EV & HVAC Surge'],
+    id: "evening_peak", name: "Evening Peak (EV + Domestic Surge)", badge: "Sunset Surge Peak",
+    description: "EV charging and cooling demand rise as solar generation falls through the evening peak.",
+    riskTimeWindow: "18:00 - 21:30", riskType: "Thermal Overload & Feeder Capacity Breach", severity: "CRITICAL ALERT", baselineViolations: [],
   },
   solar_surge: {
-    id: 'solar_surge',
-    name: 'Solar Over-Generation',
-    badge: '☀️ Reverse Power Flow',
-    description: 'High rooftop solar generation during low midday demand creates reverse flow and an overvoltage risk in the forecast window.',
-    riskTimeWindow: '11:00 - 13:30',
-    riskType: 'Reverse Flow & Voltage Swell',
-    severity: 'MEDIUM',
-    baselineViolations: ['Reverse Power Flow Violation (-1.80 MW)', 'Overvoltage Swell (1.065 p.u. > 1.050 limit)'],
-  }
+    id: "solar_surge", name: "Solar Over-Generation", badge: "Reverse Power Flow",
+    description: "High rooftop solar generation during low midday demand creates reverse-flow voltage risk.",
+    riskTimeWindow: "11:00 - 14:00", riskType: "Reverse Flow & Voltage Swell", severity: "MEDIUM", baselineViolations: [],
+  },
 };
 
-/**
- * Generate 24h baseline demand & solar profiles for given scenario
- */
+/** Generate the synthetic 24-hour feeder profile at 30-minute resolution (MW). */
 export function generateRawProfiles(scenarioId) {
-  const baseLoad = [];
-  const solarGen = [];
-  const evDemand = [];
-  const hvacDemand = [];
-  const agDemand = [];
-
-  for (let i = 0; i < 48; i++) {
-    const h = i / 2;
-    
-    // Base load curve (MW) - double peak shape typical for distribution feeders
-    let b = 2.1 + 0.4 * Math.sin((h - 6) * Math.PI / 12) + 0.3 * Math.exp(-Math.pow(h - 14, 2) / 10);
-    
-    // Solar profile
-    let s = 0;
-    if (h >= 6.5 && h <= 18.5) {
-      s = 2.5 * Math.sin((h - 6.5) * Math.PI / 12);
-      if (s < 0) s = 0;
-    }
-
-    // EV Load
+  const baseLoad = [], solarGen = [], evDemand = [], hvacDemand = [], agDemand = [];
+  for (let step = 0; step < CONFIG.timing.stepsPerDay; step++) {
+    const hour = step / 2;
+    let base = 2.1 + 0.4 * Math.sin((hour - 6) * Math.PI / 12) + 0.3 * Math.exp(-((hour - 14) ** 2) / 10);
+    let solar = hour >= 6.5 && hour <= 18.5 ? Math.max(0, 2.5 * Math.sin((hour - 6.5) * Math.PI / 12)) : 0;
     let ev = 0.15;
-    // HVAC Load
-    let hvac = 0.30 + 0.2 * Math.sin((h - 8) * Math.PI / 10);
-    if (hvac < 0.20) hvac = 0.20;
-    // Ag / Cold Storage Pump Load
+    let hvac = Math.max(0.2, 0.3 + 0.2 * Math.sin((hour - 8) * Math.PI / 10));
     let ag = 0.35;
 
-    // Apply Scenario Anomalies — Unified 5.45 MW peak (+1.25 MW overload gap above 4.2 MW rating)
-    if (scenarioId === 'cloud_event') {
-      if (i >= 25 && i <= 29) { // 12:30 - 14:30 risk window
-        b += 1.10;
-        ev += 0.40;
-        hvac += 0.34;
-        const dipFactor = 1 - 0.92 * Math.sin((i - 25) / 4 * Math.PI);
-        s = s * Math.max(0.08, dipFactor);
-      }
-    } else if (scenarioId === 'evening_peak') {
-      if (i >= 36 && i <= 43) { // 18:00 - 21:30 risk window
-        const spike = Math.sin((i - 36) / 7 * Math.PI);
-        b += 1.05 * spike;
-        ev += 1.15 * spike;
-        hvac += 0.58 * spike;
-        s = Math.max(0, s * (1 - (i - 36) / 3));
-      }
-    } else if (scenarioId === 'solar_surge') {
-      if (h >= 10.5 && h <= 14.0) {
-        s = 3.4;
-        b = 1.1;
-        ev = 0.1;
-        hvac = 0.15;
-        ag = 0.15;
-      }
+    if (scenarioId === "cloud_event" && step >= 25 && step <= 29) {
+      base += 1.1;
+      ev += 0.4;
+      hvac += 0.34;
+      const dip = 1 - 0.92 * Math.sin(((step - 25) / 4) * Math.PI);
+      solar *= Math.max(0.08, dip);
+    } else if (scenarioId === "evening_peak" && step >= 36 && step <= 43) {
+      const spike = Math.sin(((step - 36) / 7) * Math.PI);
+      base += 0.9 * spike;
+      ev += 0.8 * spike;
+      hvac += 0.58 * spike;
+      solar = Math.max(0, solar * (1 - (step - 36) / 3));
+    } else if (scenarioId === "solar_surge" && hour >= 10.5 && hour <= 14) {
+      solar = 3.4;
+      base = 1.1;
+      ev = 0.1;
+      hvac = 0.15;
+      ag = 0.15;
     }
 
-    baseLoad.push(Number(b.toFixed(3)));
-    solarGen.push(Number(s.toFixed(3)));
+    baseLoad.push(Number(base.toFixed(3)));
+    solarGen.push(Number(solar.toFixed(3)));
     evDemand.push(Number(ev.toFixed(3)));
     hvacDemand.push(Number(hvac.toFixed(3)));
     agDemand.push(Number(ag.toFixed(3)));
   }
-
   return { baseLoad, solarGen, evDemand, hvacDemand, agDemand };
 }
 
-/**
- * GridFlex Optimization Solver
- */
-export function solveGridFlex({
-  scenarioId = 'evening_peak',
-  batteryEnabled = true,
-  participationRate = 65, // Default 65%
-  batteryInitialSoC = 75,
-  feederCapacityMW = 4.2,
-  batteryCapacityMWh = 1.5,
-  batteryMaxPowerMW = 0.75,
-  includeStrategyBaselines = true,
+const max = (series) => Math.max(...series);
+const round = (value, digits = 3) => Number(value.toFixed(digits));
+
+function tariffAt(step) {
+  const hour = step / 2;
+  if (hour >= CONFIG.tariff.peakFromHour && hour <= CONFIG.tariff.peakToHour) return CONFIG.tariff.peakRsPerKwh;
+  if (hour >= CONFIG.tariff.middayFromHour && hour <= CONFIG.tariff.middayToHour) return CONFIG.tariff.middayRsPerKwh;
+  return CONFIG.tariff.offPeakRsPerKwh;
+}
+
+function costFor(netKw, limitKw) {
+  return netKw.reduce((total, load, step) => {
+    const energyCost = Math.max(0, load) * CONFIG.timing.stepHours * (tariffAt(step) / 10);
+    const overloadPenalty = Math.max(0, load - limitKw) * CONFIG.penalties.overloadRsPerKwSlot;
+    return total + energyCost + overloadPenalty;
+  }, 0);
+}
+
+function voltageAt(netMw, capacityMw) {
+  return 1 - (netMw / capacityMw - 0.5) * 0.138;
+}
+
+function solveCore({
+  scenarioId, batteryEnabled, participationRate, batteryInitialSoC,
+  feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled,
 }) {
-  if (!SCENARIOS[scenarioId]) {
-    throw new Error(`Unknown scenario: ${scenarioId}`);
+  const profile = generateRawProfiles(scenarioId);
+  const stepCount = CONFIG.timing.stepsPerDay;
+  const dt = CONFIG.timing.stepHours;
+  const capacityKwh = batteryCapacityMWh * 1000;
+  const limitKw = feederCapacityMW * 1000;
+  const voltagePlanningLimitKw = feederCapacityMW * CONFIG.feeder.plannedLoadingFraction * 1000;
+  const kw = (series) => series.map((value) => value * 1000);
+  const baselineEv = kw(profile.evDemand);
+  const baselineHvac = kw(profile.hvacDemand);
+  const baselineAg = kw(profile.agDemand);
+  const outflow = baselineAg.map((loadKw) => loadKw * dt * LOAD_ARCHETYPES.water_pump.tank.litersPerKwh);
+  const ratedHeadroom = CONFIG.loadRatings.recoveryHeadroomFactor;
+
+  const loads = [
+    makeLoad({
+      id: "neighbourhood-ev", type: "e_rickshaw", baselineKw: baselineEv,
+      powerKw: max(baselineEv) * ratedHeadroom, flexibleFraction: LOAD_ARCHETYPES.e_rickshaw.flexibleFraction,
+    }),
+    makeLoad({
+      id: "neighbourhood-pumps", type: "water_pump", baselineKw: baselineAg,
+      powerKw: max(baselineAg) * ratedHeadroom, flexibleFraction: LOAD_ARCHETYPES.water_pump.flexibleFraction,
+      tank: { capacityL: 12000, minL: 2000, initL: 10000, litersPerKwh: 10 },
+      outflowLPerStep: outflow,
+    }),
+    makeLoad({
+      id: "neighbourhood-cooling", type: "fan_cooler", baselineKw: baselineHvac,
+      powerKw: max(baselineHvac) * ratedHeadroom, flexibleFraction: LOAD_ARCHETYPES.fan_cooler.flexibleFraction,
+    }),
+  ];
+
+  const uncertainty = (step) => CONFIG.forecast.baseBandKw * (1 + CONFIG.forecast.horizonGrowth * step / stepCount);
+  const maxBandKw = uncertainty(stepCount - 1);
+  const battery = {
+    ...CONFIG.battery,
+    enabled: batteryEnabled,
+    capacityKwh,
+    maxChargeKw: Math.min(CONFIG.battery.maxChargeKw, batteryMaxPowerMW * 1000),
+    maxDischargeKw: Math.min(CONFIG.battery.maxDischargeKw, batteryMaxPowerMW * 1000),
+    initialSoc: batteryInitialSoC / 100,
+  };
+  const plan = optimize({
+    baseKw: kw(profile.baseLoad), solarKw: kw(profile.solarGen), loads,
+    limitKw: voltagePlanningLimitKw,
+    battery,
+    options: {
+      batteryEnabled,
+      loadShiftEnabled,
+      participationRate: Math.max(0, Math.min(100, participationRate)) / 100,
+      forecastBandKw: maxBandKw,
+      initialSocKwh: batteryInitialSoC / 100 * capacityKwh,
+      allowAdvance: true,
+    },
+  });
+
+  const solarCurtailmentKw = Array(stepCount).fill(0);
+  const netAfterKw = [...plan.netAfter];
+  const minVoltageSafeKw = feederCapacityMW * (0.5 - 0.05 / 0.138) * 1000;
+  if (scenarioId === "solar_surge") {
+    for (let step = 0; step < stepCount; step++) {
+      if (netAfterKw[step] < minVoltageSafeKw) {
+        solarCurtailmentKw[step] = Math.min(profile.solarGen[step] * 1000, minVoltageSafeKw - netAfterKw[step]);
+        netAfterKw[step] += solarCurtailmentKw[step];
+      }
+    }
   }
 
-  const { baseLoad, solarGen, evDemand, hvacDemand, agDemand } = generateRawProfiles(scenarioId);
-  const partRatio = Math.max(0, Math.min(100, participationRate)) / 100;
-
-  const timeSeries = [];
-  const logs = [];
-
-  logs.push({ step: '1. TELEMETRY AUDIT', msg: `Received 24h feeder load & PV forecast for Scenario [${SCENARIOS[scenarioId].name}]` });
-  logs.push({ step: '2. RISK DETECTION', msg: `Scanning feeder topology for constraint breaches against rating ${feederCapacityMW} MW...` });
-
-  let currentSoC = batteryInitialSoC;
-  let minSoC = 20;
-  let maxSoC = 95;
-  const batteryEff = 0.94;
-
-  let baselineTotalCost = 0;
-  let optimizedTotalCost = 0;
-  let baselineMaxOverloadMW = 0;
-  let optimizedMaxOverloadMW = 0;
-  let baselineMinVoltage = 1.0;
-  let optimizedMinVoltage = 1.0;
-  let optimizedMaxVoltage = 1.0;
-
-  let totalBessDischargedMWh = 0;
-  let totalBessChargedMWh = 0;
-  let totalShiftedLoadMWh = 0;
-
-  const getTariff = (idx) => {
-    const h = idx / 2;
-    if (h >= 17 && h <= 22) return 9.5;
-    if (h >= 10 && h <= 15) return 4.0;
-    return 6.5;
-  };
-
-  for (let i = 0; i < 48; i++) {
-    const timeLabel = TIME_LABELS[i];
-    const tariff = getTariff(i);
-
-    const b = baseLoad[i];
-    const s = solarGen[i];
-    const ev = evDemand[i];
-    const hvac = hvacDemand[i];
-    const ag = agDemand[i];
-
-    // Unmanaged Baseline Net Load
-    const totalBaselineDemand = b + ev + hvac + ag;
-    const baselineNetLoad = totalBaselineDemand - s;
-    
-    // Shaded 95% Forecast Confidence Band Limits
-    const forecastBandMW = 0.35;
-    const uncertaintyUpper = Number((baselineNetLoad + forecastBandMW).toFixed(2));
-    const uncertaintyLower = Number((Math.max(0, baselineNetLoad - forecastBandMW)).toFixed(2));
-
-    // Baseline Voltage & Loading
-    // Exact voltage sag formula yielding 0.891 p.u. at 5.45 MW peak
-    const baselineVoltage = 1.0 - (baselineNetLoad / feederCapacityMW - 0.5) * 0.138;
-
-    const baselineLoadPct = (baselineNetLoad / feederCapacityMW) * 100;
-    if (baselineNetLoad > feederCapacityMW) {
-      const overload = baselineNetLoad - feederCapacityMW;
-      if (overload > baselineMaxOverloadMW) baselineMaxOverloadMW = overload;
-    }
-    if (baselineVoltage < baselineMinVoltage) baselineMinVoltage = baselineVoltage;
-
-    const overloadPenalty = Math.max(0, baselineNetLoad - feederCapacityMW) * 1450;
-    const slotCostBase = Math.max(0, baselineNetLoad) * 1000 * 0.5 * (tariff / 10) + overloadPenalty;
-    baselineTotalCost += slotCostBase;
-
-    // --- GRIDFLEX CONVEX OPTIMIZATION DISPATCH ---
-    let targetDischarge = 0;
-    let targetCharge = 0;
-    let evShift = 0;
-    let hvacSetback = 0;
-    let agReschedule = 0;
-
-    const shortfall = baselineNetLoad - (feederCapacityMW * 0.85);
-
-    if (scenarioId === 'normal') {
-      targetDischarge = 0;
-      targetCharge = 0;
-      evShift = 0;
-      hvacSetback = 0;
-      agReschedule = 0;
-    } else if (shortfall > 0) {
-      // Stress Peak Hours (Discharging & Shifting)
-      let remainingReliefMW = shortfall;
-
-      const evFlexAvailable = ev * 0.80 * partRatio;
-      const hvacFlexAvailable = hvac * 0.55 * partRatio;
-      const agFlexAvailable = ag * 0.85 * partRatio;
-
-      evShift = Math.min(evFlexAvailable, remainingReliefMW);
-      remainingReliefMW -= evShift;
-      hvacSetback = Math.min(hvacFlexAvailable, remainingReliefMW);
-      remainingReliefMW -= hvacSetback;
-      agReschedule = Math.min(agFlexAvailable, remainingReliefMW);
-      remainingReliefMW -= agReschedule;
-
-      const loadShifted = evShift + hvacSetback + agReschedule;
-      totalShiftedLoadMWh += loadShifted * 0.5;
-
-      if (batteryEnabled && currentSoC > minSoC && remainingReliefMW > 0) {
-        const maxDischargeFromSoC = ((currentSoC - minSoC) / 100) * batteryCapacityMWh / 0.5;
-        targetDischarge = Math.min(batteryMaxPowerMW, remainingReliefMW, maxDischargeFromSoC);
-        
-        const socDrop = (targetDischarge * 0.5 / batteryCapacityMWh) * 100;
-        currentSoC = Math.max(minSoC, currentSoC - socDrop);
-        totalBessDischargedMWh += targetDischarge * 0.5;
-      }
-    } else if (i >= 44 || i <= 5) {
-      // Off-Peak Night Hours (22:00 - 03:00): Battery Charging & EV Load Recovery!
-      if (batteryEnabled && currentSoC < maxSoC) {
-        const availableChargePower = ((maxSoC - currentSoC) / 100) * batteryCapacityMWh / (0.5 * batteryEff);
-        targetCharge = Math.min(0.55, batteryMaxPowerMW, availableChargePower);
-        const socGain = (targetCharge * 0.5 * batteryEff / batteryCapacityMWh) * 100;
-        currentSoC = Math.min(maxSoC, currentSoC + socGain);
-        totalBessChargedMWh += targetCharge * 0.5;
-      }
-      evShift = -0.35 * partRatio; // Recovering EV charging at night (negative bar)
-      agReschedule = -0.30 * partRatio; // Running agri pumps at night (negative bar)
-    } else if (scenarioId === 'solar_surge' && baselineNetLoad < 1.2 && currentSoC < maxSoC && s > 1.0) {
-      // Solar Surplus Midday Window
-      if (batteryEnabled) {
-        const availableChargePower = ((maxSoC - currentSoC) / 100) * batteryCapacityMWh / (0.5 * batteryEff);
-        targetCharge = Math.min(0.60, batteryMaxPowerMW, availableChargePower);
-        const socGain = (targetCharge * 0.5 * batteryEff / batteryCapacityMWh) * 100;
-        currentSoC = Math.min(maxSoC, currentSoC + socGain);
-        totalBessChargedMWh += targetCharge * 0.5;
-      }
-      agReschedule = -0.32 * partRatio;
-    } else {
-      evShift = 0;
-      hvacSetback = 0;
-      agReschedule = 0;
-      targetDischarge = 0;
-      targetCharge = 0;
-    }
-
-    const totalLoadShift = evShift + hvacSetback + agReschedule;
-    const bessNetPower = targetDischarge - targetCharge;
-    let optNetLoad = baselineNetLoad - totalLoadShift - bessNetPower;
-    let solarCurtailmentMW = 0;
-    const minimumVoltageSafeLoad = feederCapacityMW * (0.5 - 0.05 / 0.138);
-    if (scenarioId === 'solar_surge' && optNetLoad < minimumVoltageSafeLoad) {
-      solarCurtailmentMW = Math.min(s, minimumVoltageSafeLoad - optNetLoad);
-      optNetLoad += solarCurtailmentMW;
-    }
-
-    const optVoltage = 1.0 - (optNetLoad / feederCapacityMW - 0.5) * 0.138;
-
-    const optLoadPct = (optNetLoad / feederCapacityMW) * 100;
-    if (optNetLoad > feederCapacityMW) {
-      const overload = optNetLoad - feederCapacityMW;
-      if (overload > optimizedMaxOverloadMW) optimizedMaxOverloadMW = overload;
-    }
-    if (optVoltage < optimizedMinVoltage) optimizedMinVoltage = optVoltage;
-    if (optVoltage > optimizedMaxVoltage) optimizedMaxVoltage = optVoltage;
-
-    const optimizedOverloadPenalty = Math.max(0, optNetLoad - feederCapacityMW) * 1450;
-    const slotCostOpt = Math.max(0, optNetLoad) * 1000 * 0.5 * (tariff / 10) + optimizedOverloadPenalty;
-    optimizedTotalCost += slotCostOpt;
-
-    timeSeries.push({
-      time: timeLabel,
-      index: i,
-      baseLoad: Number(b.toFixed(2)),
-      solarGen: Number(s.toFixed(2)),
-      solarCurtailmentMW: Number(solarCurtailmentMW.toFixed(2)),
-      hvacDemand: Number(hvac.toFixed(3)),
-      baselineNetLoad: Number(baselineNetLoad.toFixed(2)),
-      optNetLoad: Number(optNetLoad.toFixed(2)),
-      uncertaintyUpper,
-      uncertaintyLower,
-      feederLimit: feederCapacityMW,
-      
-      baselineVoltage: Number(Number(baselineVoltage).toFixed(3)),
-      optVoltage: Number(Number(optVoltage).toFixed(3)),
-      voltageMinLimit: 0.95,
-      voltageMaxLimit: 1.05,
-
-      baselineLoadPct: Number(baselineLoadPct.toFixed(1)),
-      optLoadPct: Number(optLoadPct.toFixed(1)),
-
-      bessPower: Number(bessNetPower.toFixed(2)),
-      bessSoC: Number(currentSoC.toFixed(1)),
-      evShift: Number(evShift.toFixed(2)),
-      hvacSetback: Number(hvacSetback.toFixed(3)),
-      agReschedule: Number(agReschedule.toFixed(2)),
-      totalLoadShift: Number(totalLoadShift.toFixed(2)),
-
-      isRiskWindow: baselineNetLoad > feederCapacityMW * 0.95,
-      hasViolation: optNetLoad > feederCapacityMW || optVoltage < 0.95 || optVoltage > 1.05,
-    });
-  }
-
-  logs.push({ step: '3. DISPATCH OPTIMIZATION', msg: 'Allocated available customer flexibility first, then battery power within energy and state-of-charge limits.' });
-  logs.push({ step: '4. CONSTRAINT CHECK', msg: `Measured thermal, voltage, and battery limits against the dispatched time series: ${optimizedMaxOverloadMW === 0 && optimizedMinVoltage >= 0.95 && optimizedMaxVoltage <= 1.05 && currentSoC >= minSoC && currentSoC <= maxSoC ? 'all constraints pass' : 'one or more constraints remain unmet'}.` });
-  logs.push({ step: '5. PLAN DISPATCH', msg: 'Proposed asset dispatch is reflected in the measured optimized time series.' });
-
-  const baselinePeakMW = Math.max(...timeSeries.map(d => d.baselineNetLoad));
-  const optPeakMW = Math.max(...timeSeries.map(d => d.optNetLoad));
-  const peakShavedMW = baselineMaxOverloadMW > 0 ? Number((baselinePeakMW - optPeakMW).toFixed(2)) : 0;
-  const peakShavedPct = baselineMaxOverloadMW > 0 && baselinePeakMW > 0 ? Number(((peakShavedMW / baselinePeakMW) * 100).toFixed(1)) : 0;
-
-  const dailySavingsRs = Math.round(baselineTotalCost - optimizedTotalCost);
-  const protectionSummary = {
-    thermalCompliant: optimizedMaxOverloadMW === 0,
-    voltageCompliant: optimizedMinVoltage >= 0.95 && optimizedMaxVoltage <= 1.05,
-    batterySoCCompliant: timeSeries.every((slot) => slot.bessSoC >= minSoC && slot.bessSoC <= maxSoC),
-    slaCompliant: timeSeries.every((slot) =>
-      slot.hvacSetback <= slot.hvacDemand * 0.55 * partRatio + 0.001
-    ),
-    maxThermalPct: Math.round(Math.max(...timeSeries.map((d) => d.optLoadPct))),
-    minVoltagePu: Number(optimizedMinVoltage.toFixed(3)),
-    maxVoltagePu: Number(optimizedMaxVoltage.toFixed(3)),
-  };
-
-  const buildStrategyRow = (name, result, color) => {
-    const kpis = result.kpis;
-    const protection = result.protectionSummary;
-    const safe = protection.thermalCompliant && protection.voltageCompliant && protection.batterySoCCompliant && protection.slaCompliant;
+  const baselineNetKw = plan.netBefore;
+  const baselineNetMw = baselineNetKw.map((value) => value / 1000);
+  const optimizedNetMw = netAfterKw.map((value) => value / 1000);
+  const baselineVoltage = baselineNetMw.map((value) => voltageAt(value, feederCapacityMW));
+  const optimizedVoltage = optimizedNetMw.map((value) => voltageAt(value, feederCapacityMW));
+  const baselinePeakMw = max(baselineNetMw);
+  const optPeakMw = max(optimizedNetMw);
+  const baselineOverload = Math.max(0, baselinePeakMw - feederCapacityMW);
+  const optimizedOverload = Math.max(0, max(optimizedNetMw) - feederCapacityMW);
+  const initialKwh = batteryInitialSoC / 100 * capacityKwh;
+  const timeSeries = Array.from({ length: stepCount }, (_, step) => {
+    const schedule = (id) => plan.schedules.find((item) => item.id === id).sched[step];
+    const evShift = baselineEv[step] - schedule("neighbourhood-ev");
+    const hvacSetback = baselineHvac[step] - schedule("neighbourhood-cooling");
+    const agReschedule = baselineAg[step] - schedule("neighbourhood-pumps");
+    const bessPower = plan.battery.dischargeKw[step] - plan.battery.chargeKw[step];
+    const bandMw = uncertainty(step) / 1000;
+    const baseVoltage = baselineVoltage[step];
+    const optVoltage = optimizedVoltage[step];
+    const baseMw = baselineNetMw[step];
+    const optMw = optimizedNetMw[step];
     return {
-      name,
-      overload: kpis.optimizedMaxOverloadMW > 0 ? `+${kpis.optimizedMaxOverloadMW.toFixed(2)} MW Overload` : '0.00 MW Overload',
-      minVoltage: `${kpis.optimizedMinVoltage.toFixed(3)} p.u.`,
-      violations: `${kpis.optimizedViolationCount} Breaches`,
-      cost: `₹${Math.round(kpis.optimizedDailyCostRs).toLocaleString('en-IN')}/day`,
-      status: safe ? 'SAFE' : 'INFEASIBLE',
-      color,
+      time: TIME_LABELS[step], index: step,
+      baseLoad: profile.baseLoad[step], solarGen: profile.solarGen[step],
+      solarCurtailmentMW: round(solarCurtailmentKw[step] / 1000, 2),
+      hvacDemand: profile.hvacDemand[step],
+      baselineNetLoad: round(baseMw, 2), optNetLoad: round(optMw, 2),
+      uncertaintyUpper: round(baseMw + bandMw, 2), uncertaintyLower: round(Math.max(0, baseMw - bandMw), 2),
+      feederLimit: feederCapacityMW,
+      baselineVoltage: round(baseVoltage), optVoltage: round(optVoltage),
+      voltageMinLimit: 0.95, voltageMaxLimit: 1.05,
+      baselineLoadPct: round(baseMw / feederCapacityMW * 100, 1),
+      optLoadPct: round(optMw / feederCapacityMW * 100, 1),
+      bessPower: round(bessPower / 1000, 2),
+      bessSoC: round((plan.battery.socKwh[step] / capacityKwh) * 100, 1),
+      evShift: round(evShift / 1000, 2), hvacSetback: round(hvacSetback / 1000, 3),
+      agReschedule: round(agReschedule / 1000, 2),
+      totalLoadShift: round((evShift + hvacSetback + agReschedule) / 1000, 2),
+      isRiskWindow: baseMw > feederCapacityMW * 0.95,
+      hasViolation: optMw > feederCapacityMW + 1e-8 || optVoltage < 0.95 || optVoltage > 1.05,
     };
-  };
+  });
 
-  const strategyBaselines = includeStrategyBaselines
-    ? [
-        buildStrategyRow('1. Do Nothing (Unmanaged Base)', solveGridFlex({ scenarioId, batteryEnabled: false, participationRate: 0, batteryInitialSoC, feederCapacityMW, includeStrategyBaselines: false }), '#f87171'),
-        buildStrategyRow('2. Battery-Only (BESS Alone)', solveGridFlex({ scenarioId, batteryEnabled: true, participationRate: 0, batteryInitialSoC, feederCapacityMW, includeStrategyBaselines: false }), '#fbbf24'),
-        buildStrategyRow('3. Load-Shift-Only (DR Alone)', solveGridFlex({ scenarioId, batteryEnabled: false, participationRate, batteryInitialSoC, feederCapacityMW, includeStrategyBaselines: false }), '#fbbf24'),
-        buildStrategyRow('4. GridFlex Configured Plan', { kpis: {
-          optimizedMaxOverloadMW: Number(optimizedMaxOverloadMW.toFixed(2)),
-          optimizedMinVoltage: Number(optimizedMinVoltage.toFixed(3)),
-          optimizedViolationCount: timeSeries.filter((slot) => slot.hasViolation).length,
-          optimizedDailyCostRs: optimizedTotalCost,
-        }, protectionSummary }, '#34d399'),
-      ]
-    : [];
+  const baselineDailyCost = costFor(baselineNetKw, limitKw);
+  const optimizedDailyCost = costFor(netAfterKw, limitKw);
+  const constraintChecks = plan.validation.checks;
+  const maxOptimizedVoltage = max(optimizedVoltage);
+  const minOptimizedVoltage = Math.min(...optimizedVoltage);
+  const protectionSummary = {
+    thermalCompliant: optimizedOverload <= 1e-6,
+    voltageCompliant: minOptimizedVoltage >= 0.95 - 1e-8 && maxOptimizedVoltage <= 1.05 + 1e-8,
+    batterySoCCompliant: plan.battery.socKwh.every((value) => value >= Math.min(plan.battery.reserveKwh, initialKwh) - 1e-6 && value <= battery.maxSoc * capacityKwh + 1e-6),
+    slaCompliant: constraintChecks.windowsAndDeadlines && constraintChecks.ratedPower && constraintChecks.tankLimits && constraintChecks.criticalUntouched && constraintChecks.optOutsExcluded,
+    maxThermalPct: Math.round(max(optimizedNetMw) / feederCapacityMW * 100),
+    minVoltagePu: round(minOptimizedVoltage), maxVoltagePu: round(maxOptimizedVoltage),
+  };
+  const logs = [
+    { step: "1. TELEMETRY AUDIT", msg: `Loaded 24-hour synthetic feeder profile for ${SCENARIOS[scenarioId].name}.` },
+    { step: "2. RISK DETECTION", msg: `Measured demand minus solar against the ${feederCapacityMW.toFixed(1)} MW feeder rating and planning limit.` },
+    { step: "3. DISPATCH OPTIMIZATION", msg: "Scheduled flexible loads within participation, rated-power, time-window, deadline, and tank constraints." },
+    { step: "4. CONSTRAINT CHECK", msg: plan.validation.allHardConstraintsPass ? "Load and battery hard-constraint checks pass." : "At least one load or battery hard-constraint check failed." },
+    { step: "5. PLAN DISPATCH", msg: "Measured the resulting time series, remaining feeder violations, and response costs." },
+  ];
 
   return {
-    timeSeries,
-    logs,
-    strategyBaselines,
+    timeSeries, logs, protectionSummary,
     kpis: {
-      baselinePeakMW: Number(baselinePeakMW.toFixed(2)),
-      optPeakMW: Number(optPeakMW.toFixed(2)),
-      peakShavedMW,
-      peakShavedPct,
-      dailySavingsRs,
-      co2SavedTons: null,
-      capexDeferralLakhs: null,
-      baselineDailyCostRs: Math.round(baselineTotalCost),
-      optimizedDailyCostRs: Math.round(optimizedTotalCost),
-      totalBessDischargedMWh: Number(totalBessDischargedMWh.toFixed(2)),
-      totalShiftedLoadMWh: Number(totalShiftedLoadMWh.toFixed(2)),
-      baselineMaxOverloadMW: Number(baselineMaxOverloadMW.toFixed(2)),
-      optimizedMaxOverloadMW: Number(optimizedMaxOverloadMW.toFixed(2)),
+      baselinePeakMW: round(baselinePeakMw, 2), optPeakMW: round(optPeakMw, 2),
+      peakShavedMW: baselineOverload > 0 ? round(baselinePeakMw - optPeakMw, 2) : 0,
+      peakShavedPct: baselineOverload > 0 && baselinePeakMw > 0 ? round((baselinePeakMw - optPeakMw) / baselinePeakMw * 100, 1) : 0,
+      dailySavingsRs: Math.round(baselineDailyCost - optimizedDailyCost),
+      co2SavedTons: null, capexDeferralLakhs: null,
+      baselineDailyCostRs: Math.round(baselineDailyCost), optimizedDailyCostRs: Math.round(optimizedDailyCost),
+      totalBessDischargedMWh: round(plan.metrics.batteryDischargedKwh / 1000, 2),
+      totalShiftedLoadMWh: round(plan.metrics.shiftedKwh / 1000, 2),
+      baselineMaxOverloadMW: round(baselineOverload, 2), optimizedMaxOverloadMW: round(optimizedOverload, 2),
       optimizedViolationCount: timeSeries.filter((slot) => slot.hasViolation).length,
-      baselineMinVoltage: Number(Number(baselineMinVoltage).toFixed(3)),
-      baselineMaxVoltage: Number(Math.max(...timeSeries.map((d) => d.baselineVoltage)).toFixed(3)),
-      optimizedMinVoltage: Number(Number(optimizedMinVoltage).toFixed(3)),
+      baselineMinVoltage: round(Math.min(...baselineVoltage)), baselineMaxVoltage: round(max(baselineVoltage)),
+      optimizedMinVoltage: round(minOptimizedVoltage),
     },
-    protectionSummary,
+    dispatchPlan: plan,
   };
+}
+
+export function solveGridFlex({
+  scenarioId = "evening_peak", batteryEnabled = CONFIG.battery.enabled,
+  participationRate = CONFIG.participation.defaultRate * 100,
+  batteryInitialSoC = CONFIG.battery.initialSoc * 100,
+  feederCapacityMW = CONFIG.feeder.limitKw / 1000,
+  batteryCapacityMWh = CONFIG.battery.capacityKwh / 1000,
+  batteryMaxPowerMW = CONFIG.battery.maxDischargeKw / 1000,
+  loadShiftEnabled = true, includeStrategyBaselines = true,
+} = {}) {
+  if (!SCENARIOS[scenarioId]) throw new Error(`Unknown scenario: ${scenarioId}`);
+
+  const result = solveCore({
+    scenarioId, batteryEnabled, participationRate, batteryInitialSoC,
+    feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled,
+  });
+  if (!includeStrategyBaselines) return result;
+
+  const baselineOptions = [
+    ["1. Do Nothing (Unmanaged Base)", { batteryEnabled: false, participationRate: 0, loadShiftEnabled: false }, "#f87171"],
+    ["2. Battery-Only (BESS Alone)", { batteryEnabled: true, participationRate: 0, loadShiftEnabled: false }, "#fbbf24"],
+    ["3. Load-Shift-Only (DR Alone)", { batteryEnabled: false, participationRate, loadShiftEnabled: true }, "#fbbf24"],
+  ];
+  const strategyBaselines = baselineOptions.map(([name, options, color]) => {
+    const baseline = solveCore({ scenarioId, batteryInitialSoC, feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, ...options });
+    const { kpis, protectionSummary } = baseline;
+    const safe = protectionSummary.thermalCompliant && protectionSummary.voltageCompliant && protectionSummary.batterySoCCompliant && protectionSummary.slaCompliant;
+    return {
+      name,
+      overload: kpis.optimizedMaxOverloadMW > 0 ? `+${kpis.optimizedMaxOverloadMW.toFixed(2)} MW Overload` : "0.00 MW Overload",
+      minVoltage: `${kpis.optimizedMinVoltage.toFixed(3)} p.u.`,
+      violations: `${kpis.optimizedViolationCount} Breaches`,
+      cost: `₹${kpis.optimizedDailyCostRs.toLocaleString("en-IN")}/day`,
+      status: safe ? "SAFE" : "INFEASIBLE",
+      color,
+    };
+  });
+  const safe = result.protectionSummary.thermalCompliant && result.protectionSummary.voltageCompliant && result.protectionSummary.batterySoCCompliant && result.protectionSummary.slaCompliant;
+  strategyBaselines.push({
+    name: "4. GridFlex Configured Plan",
+    overload: result.kpis.optimizedMaxOverloadMW > 0 ? `+${result.kpis.optimizedMaxOverloadMW.toFixed(2)} MW Overload` : "0.00 MW Overload",
+    minVoltage: `${result.kpis.optimizedMinVoltage.toFixed(3)} p.u.`,
+    violations: `${result.kpis.optimizedViolationCount} Breaches`,
+    cost: `₹${result.kpis.optimizedDailyCostRs.toLocaleString("en-IN")}/day`,
+    status: safe ? "SAFE" : "INFEASIBLE",
+    color: "#34d399",
+  });
+  return { ...result, strategyBaselines };
 }

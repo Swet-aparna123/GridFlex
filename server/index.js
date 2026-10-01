@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { CONFIG } from '../src/engine/config.js';
 import { SCENARIOS, solveGridFlex } from '../src/engine/gridflexEngine.js';
 
 const port = Number(process.env.GRIDFLEX_API_PORT || 4174);
@@ -39,9 +40,9 @@ function validateRequest(payload) {
   }
 
   const scenarioId = payload.scenarioId ?? 'evening_peak';
-  const batteryEnabled = payload.batteryEnabled ?? true;
-  const participationRate = payload.participationRate ?? 65;
-  const batteryInitialSoC = payload.batteryInitialSoC ?? 75;
+  const batteryEnabled = payload.batteryEnabled ?? CONFIG.battery.enabled;
+  const participationRate = payload.participationRate ?? CONFIG.participation.defaultRate * 100;
+  const batteryInitialSoC = payload.batteryInitialSoC ?? CONFIG.battery.initialSoc * 100;
 
   if (!SCENARIOS[scenarioId]) {
     throw Object.assign(new Error('scenarioId must be a supported GridFlex scenario.'), { statusCode: 400 });
@@ -56,7 +57,7 @@ function validateRequest(payload) {
     throw Object.assign(new Error('batteryInitialSoC must be between 20 and 95.'), { statusCode: 400 });
   }
 
-  return { scenarioId, batteryEnabled, participationRate, batteryInitialSoC, feederCapacityMW: 4.2 };
+  return { scenarioId, batteryEnabled, participationRate, batteryInitialSoC, feederCapacityMW: CONFIG.feeder.limitKw / 1000 };
 }
 
 const server = createServer(async (request, response) => {

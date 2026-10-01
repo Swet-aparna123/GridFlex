@@ -1,6 +1,5 @@
 import React from 'react';
-import { SCENARIOS } from '../engine/gridflexEngine';
-import { CloudRain, Moon, Sun, Play, RefreshCw, Battery, Users, Sliders, Sparkles } from 'lucide-react';
+import { RefreshCw, Battery, Users, Sliders, Sparkles } from 'lucide-react';
 
 export default function ScenarioSelector({
   scenarioId,
@@ -14,8 +13,6 @@ export default function ScenarioSelector({
   onRunOptimizer,
   isEngineSolving
 }) {
-  const currentScenario = SCENARIOS[scenarioId];
-
   return (
     <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>
       

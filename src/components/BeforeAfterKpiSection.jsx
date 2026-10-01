@@ -2,27 +2,25 @@ import React from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid, Legend } from 'recharts';
 import { DollarSign, TrendingDown, Leaf, Building, Award, BarChart2, Info } from 'lucide-react';
 
+function CustomCompareTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div style={{ background: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--tooltip-text)', boxShadow: 'var(--shadow-card)' }}>
+      <div style={{ fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px' }}>Time: {label}</div>
+      {payload.map((entry, index) => (
+        <div key={`item-${index}`} style={{ color: entry.color, display: 'flex', justifyContent: 'space-between', gap: '12px', margin: '2px 0' }}>
+          <span>{entry.name}:</span>
+          <span style={{ fontWeight: 600 }}>{entry.value} {entry.unit || ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function BeforeAfterKpiSection({ engineData }) {
   const { timeSeries, kpis, strategyBaselines } = engineData;
   const isPlanFeasible = engineData.protectionSummary.thermalCompliant && engineData.protectionSummary.voltageCompliant && engineData.protectionSummary.batterySoCCompliant && engineData.protectionSummary.slaCompliant;
-
-  // Tooltip for Before vs After
-  const CustomCompareTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{ background: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--tooltip-text)', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px' }}>Time: {label}</div>
-          {payload.map((entry, index) => (
-            <div key={`item-${index}`} style={{ color: entry.color, display: 'flex', justifyContent: 'space-between', gap: '12px', margin: '2px 0' }}>
-              <span>{entry.name}:</span>
-              <span style={{ fontWeight: 600 }}>{entry.value} {entry.unit || ''}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div id="proof-section" className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>

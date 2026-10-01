@@ -1,7 +1,7 @@
 import React from 'react';
-import { X, CheckCircle, ArrowRight, Play, Cpu, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle, ArrowRight, Cpu } from 'lucide-react';
 
-export default function StoryModal({ isOpen, onClose, onJumpToStep }) {
+export default function StoryModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   const steps = [

@@ -2,44 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { ShieldCheck, CheckCircle2, AlertTriangle, Terminal, Info } from 'lucide-react';
 
-export default function OptimizerSection({ engineData, batteryEnabled, participationRate, isEngineSolving }) {
+function CustomBarTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div style={{ background: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--tooltip-text)', boxShadow: 'var(--shadow-card)' }}>
+      <div style={{ fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px' }}>Time: {label}</div>
+      {payload.map((entry, index) => (
+        <div key={`item-${index}`} style={{ color: entry.color, display: 'flex', justifyContent: 'space-between', gap: '12px', margin: '2px 0' }}>
+          <span>{entry.name}:</span>
+          <span style={{ fontWeight: 600 }}>{entry.value > 0 ? `+${entry.value}` : entry.value} MW</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function OptimizerSection({ engineData, batteryEnabled, participationRate }) {
   const { timeSeries, protectionSummary, logs } = engineData;
   const constraintsPass = protectionSummary.thermalCompliant && protectionSummary.voltageCompliant && protectionSummary.batterySoCCompliant && protectionSummary.slaCompliant;
   const batterySoCValues = timeSeries.map((slot) => slot.bessSoC);
 
   // Real-time line-by-line typing animation for solver execution console
-  const [visibleLogs, setVisibleLogs] = useState(logs);
+  const [visibleLogCount, setVisibleLogCount] = useState(0);
 
   useEffect(() => {
-    if (isEngineSolving) {
-      setVisibleLogs([]);
-      logs.forEach((log, index) => {
-        setTimeout(() => {
-          setVisibleLogs(prev => [...prev, log]);
-        }, index * 160);
-      });
-    } else {
-      setVisibleLogs(logs);
-    }
-  }, [isEngineSolving, logs]);
+    const timers = logs.map((_, index) => setTimeout(() => {
+      setVisibleLogCount(index + 1);
+    }, (index + 1) * 160));
 
-  // Custom Bar Tooltip
-  const CustomBarTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div style={{ background: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', padding: '10px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--tooltip-text)', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontWeight: 700, borderBottom: '1px solid var(--border-color)', paddingBottom: '4px', marginBottom: '6px' }}>Time: {label}</div>
-          {payload.map((entry, index) => (
-            <div key={`item-${index}`} style={{ color: entry.color, display: 'flex', justifyContent: 'space-between', gap: '12px', margin: '2px 0' }}>
-              <span>{entry.name}:</span>
-              <span style={{ fontWeight: 600 }}>{entry.value > 0 ? `+${entry.value}` : entry.value} MW</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
+    return () => timers.forEach(clearTimeout);
+  }, [logs]);
+
+  const visibleLogs = logs.slice(0, visibleLogCount);
 
   return (
     <div id="optimizer-section" className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>

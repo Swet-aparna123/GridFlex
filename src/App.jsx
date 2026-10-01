@@ -141,8 +141,6 @@ export default function App() {
             <div id="topology-section">
               <FeederTopology
                 batteryEnabled={batteryEnabled}
-                participationRate={participationRate}
-                currentScenario={scenarioId}
                 isOptimized={Boolean(engineData?.protectionSummary && engineData.protectionSummary.thermalCompliant && engineData.protectionSummary.voltageCompliant)}
                 engineData={engineData}
               />
@@ -196,7 +194,6 @@ export default function App() {
               engineData={engineData}
               batteryEnabled={batteryEnabled}
               participationRate={participationRate}
-              isEngineSolving={isEngineSolving}
             />}
 
             {/* Stage 3: Operator Plan Approval Gateway */}
