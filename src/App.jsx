@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import FeederTopology from './components/FeederTopology';
 import ScenarioSelector from './components/ScenarioSelector';
@@ -8,7 +8,6 @@ import ApprovalSection from './components/ApprovalSection';
 import BeforeAfterKpiSection from './components/BeforeAfterKpiSection';
 import ConsumerView from './components/ConsumerView';
 import StoryModal from './components/StoryModal';
-import { solveGridFlex } from './engine/gridflexEngine';
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
@@ -18,10 +17,13 @@ export default function App() {
   });
   const [activeView, setActiveView] = useState('discom'); // 'discom' | 'consumer'
   const [selectedFeeder, setSelectedFeeder] = useState('Feeder-04');
-  const [scenarioId, setScenarioId] = useState('evening_peak');
+  const [scenarioId, setScenarioId] = useState('normal');
   const [batteryEnabled, setBatteryEnabled] = useState(true);
   const [participationRate, setParticipationRate] = useState(65); // Default 65% for realistic customer trade-off
   const [batteryInitialSoC, setBatteryInitialSoC] = useState(75);
+  const [engineData, setEngineData] = useState(null);
+  const [engineError, setEngineError] = useState('');
+  const [solveRequestId, setSolveRequestId] = useState(0);
   const [planApproved, setPlanApproved] = useState(false);
   const [isEngineSolving, setIsEngineSolving] = useState(false);
   const [isStoryModalOpen, setIsStoryModalOpen] = useState(false);
@@ -37,16 +39,37 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Compute GridFlex simulation results whenever parameters change
-  const engineData = useMemo(() => {
-    return solveGridFlex({
-      scenarioId,
-      batteryEnabled,
-      participationRate,
-      batteryInitialSoC,
-      feederCapacityMW: 4.2
-    });
-  }, [scenarioId, batteryEnabled, participationRate, batteryInitialSoC]);
+  // Re-solve on the local decision API whenever an operating input changes.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const requestSolve = async () => {
+      setIsEngineSolving(true);
+      setEngineError('');
+      setEngineData(null);
+
+      try {
+        const response = await fetch('/api/solve', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ scenarioId, batteryEnabled, participationRate, batteryInitialSoC }),
+          signal: controller.signal,
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'GridFlex solve failed.');
+        setEngineData(result);
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setEngineError(error.message || 'Unable to connect to the GridFlex decision API.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsEngineSolving(false);
+      }
+    };
+
+    requestSolve();
+    return () => controller.abort();
+  }, [scenarioId, batteryEnabled, participationRate, batteryInitialSoC, solveRequestId]);
 
   // Track active section as user scrolls
   useEffect(() => {
@@ -78,10 +101,7 @@ export default function App() {
 
   // Handler to trigger solver animation
   const handleRunOptimizer = () => {
-    setIsEngineSolving(true);
-    setTimeout(() => {
-      setIsEngineSolving(false);
-    }, 850);
+    setSolveRequestId((requestId) => requestId + 1);
   };
 
   // Scroll to section handler
@@ -123,7 +143,7 @@ export default function App() {
                 batteryEnabled={batteryEnabled}
                 participationRate={participationRate}
                 currentScenario={scenarioId}
-                isOptimized={true}
+                isOptimized={Boolean(engineData?.protectionSummary && engineData.protectionSummary.thermalCompliant && engineData.protectionSummary.voltageCompliant)}
                 engineData={engineData}
               />
             </div>
@@ -134,7 +154,6 @@ export default function App() {
               setScenarioId={(id) => {
                 setScenarioId(id);
                 setPlanApproved(false);
-                handleRunOptimizer();
               }}
               batteryEnabled={batteryEnabled}
               setBatteryEnabled={(val) => {
@@ -155,33 +174,44 @@ export default function App() {
               isEngineSolving={isEngineSolving}
             />
 
+            {isEngineSolving && !engineData && (
+              <div role="status" style={{ padding: '12px 16px', marginBottom: '20px', color: 'var(--text-muted)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                Solving feeder dispatch through the local GridFlex API...
+              </div>
+            )}
+            {engineError && (
+              <div role="alert" style={{ padding: '12px 16px', marginBottom: '20px', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.45)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                <span>Decision API unavailable: {engineError}</span>
+                <button type="button" onClick={handleRunOptimizer} style={{ color: 'inherit', background: 'transparent', border: '1px solid currentColor', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}>
+                  Retry solve
+                </button>
+              </div>
+            )}
+
             {/* Stage 1: Forecast & Risk Window */}
-            <ForecastSection
-              scenarioId={scenarioId}
-              engineData={engineData}
-            />
+            {engineData && <ForecastSection scenarioId={scenarioId} engineData={engineData} />}
 
             {/* Stage 2: AI Optimizer Dispatch & Protection Matrix */}
-            <OptimizerSection
+            {engineData && <OptimizerSection
               engineData={engineData}
               batteryEnabled={batteryEnabled}
               participationRate={participationRate}
               isEngineSolving={isEngineSolving}
-            />
+            />}
 
             {/* Stage 3: Operator Plan Approval Gateway */}
-            <ApprovalSection
+            {engineData && <ApprovalSection
               planApproved={planApproved}
               setPlanApproved={setPlanApproved}
               scenarioId={scenarioId}
               engineData={engineData}
-            />
+            />}
 
             {/* Stage 4: Before vs After Proof & KPI Measurement */}
-            <BeforeAfterKpiSection
+            {engineData && <BeforeAfterKpiSection
               engineData={engineData}
               scenarioId={scenarioId}
-            />
+            />}
           </>
         ) : (
           /* Household Prosumer View */

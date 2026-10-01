@@ -8,12 +8,12 @@ export default function StoryModal({ isOpen, onClose, onJumpToStep }) {
     { title: '1. Open DISCOM Dashboard', desc: 'Inspect Feeder-04 single-line topology and initial operating parameters.' },
     { title: '2. Select Cloud Event / Evening Peak', desc: 'Trigger a steep solar ramp or unmanaged EV surge scenario.' },
     { title: '3. Forecast & Risk Window', desc: 'View 24h predictive forecast and highlighted stress window.' },
-    { title: '4. Detected Flexibility Gap', desc: 'Audit MW shortfall (+1.42 MW) and available DER flex capacity.' },
-    { title: '5. Run GridFlex Engine 🧠', desc: 'Formulate MILP optimization & solve coordinated dispatch schedule.' },
+    { title: '4. Detected Flexibility Gap', desc: 'Compare the modeled feeder demand with available flexible load and battery capacity.' },
+    { title: '5. Run GridFlex Engine 🧠', desc: 'Solve the configured dispatch and inspect the measured constraint checks.' },
     { title: '6. Review Load Shift & BESS Action', desc: 'Examine BESS discharge + EV delay + HVAC setback dispatches.' },
-    { title: '7. Protection Summary', desc: 'Verify 100% compliance on thermal limits, voltage bounds & battery DoD.' },
-    { title: '8. Operator Approval', desc: 'Click Approve Plan to dispatch control vectors via OpenADR / IEEE 2030.5.' },
-    { title: '9. Before vs After Proof', desc: 'Compare flattened load curve, restored voltage, and DISCOM financial ROI.' },
+    { title: '7. Protection Summary', desc: 'Check thermal, voltage, battery, and customer-flex results; unsafe plans cannot be approved.' },
+    { title: '8. Operator Approval', desc: 'Record local approval for a feasible simulated plan; no external control signals are sent.' },
+    { title: '9. Before vs After Proof', desc: 'Compare the modeled load curve, voltage profile, and illustrative operating cost.' },
     { title: '10. Sensitivity & Re-solve Live', desc: 'Toggle Battery OFF or slide Participation to watch live re-optimization!' },
   ];
 

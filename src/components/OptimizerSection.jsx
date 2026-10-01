@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
-import { ShieldCheck, CheckCircle2, Terminal, Info } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, AlertTriangle, Terminal, Info } from 'lucide-react';
 
 export default function OptimizerSection({ engineData, batteryEnabled, participationRate, isEngineSolving }) {
   const { timeSeries, protectionSummary, logs } = engineData;
+  const constraintsPass = protectionSummary.thermalCompliant && protectionSummary.voltageCompliant && protectionSummary.batterySoCCompliant && protectionSummary.slaCompliant;
+  const batterySoCValues = timeSeries.map((slot) => slot.bessSoC);
 
   // Real-time line-by-line typing animation for solver execution console
   const [visibleLogs, setVisibleLogs] = useState(logs);
@@ -50,17 +52,17 @@ export default function OptimizerSection({ engineData, batteryEnabled, participa
               STAGE 2
             </span>
             <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-heading)' }}>
-              WHAT CAN WE DO? — Physics-Constrained Multi-Objective MILP Optimization
+              WHAT CAN WE DO? — Constraint-Aware Feeder Dispatch
             </h2>
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            GridFlex formulates a convex Optimization Problem (MILP) balancing energy tariffs, battery health, thermal limits, and customer comfort.
+            GridFlex allocates available load flexibility and battery power, then checks the resulting feeder and asset limits.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '6px 14px', borderRadius: '8px', color: 'var(--success)', fontSize: '0.8rem', fontWeight: 600 }}>
-          <ShieldCheck size={16} />
-          <span>Protection Constraints Certified 100% Safe</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: constraintsPass ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', border: `1px solid ${constraintsPass ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.4)'}`, padding: '6px 14px', borderRadius: '8px', color: constraintsPass ? 'var(--success)' : 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}>
+          {constraintsPass ? <ShieldCheck size={16} /> : <AlertTriangle size={16} />}
+          <span>{constraintsPass ? 'All modeled constraints pass' : 'One or more constraints fail'}</span>
         </div>
       </div>
 
@@ -109,9 +111,9 @@ export default function OptimizerSection({ engineData, batteryEnabled, participa
               <div style={{ background: 'var(--bg-panel-inner)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Thermal Rating</span>
-                  <CheckCircle2 size={14} color="var(--success)" />
+                  {protectionSummary.thermalCompliant ? <CheckCircle2 size={14} color="var(--success)" /> : <AlertTriangle size={14} color="var(--danger)" />}
                 </div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--success)' }} className="font-mono">
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: protectionSummary.thermalCompliant ? 'var(--success)' : 'var(--danger)' }} className="font-mono">
                   {protectionSummary.maxThermalPct}% Max Loading
                 </div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '2px' }}>Limit: ≤ 100% (4.2 MW)</div>
@@ -125,10 +127,10 @@ export default function OptimizerSection({ engineData, batteryEnabled, participa
                       (p.u.) <Info size={10} color="var(--text-dim)"/>
                     </span>
                   </span>
-                  <CheckCircle2 size={14} color="var(--success)" />
+                  {protectionSummary.voltageCompliant ? <CheckCircle2 size={14} color="var(--success)" /> : <AlertTriangle size={14} color="var(--danger)" />}
                 </div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--success)' }} className="font-mono">
-                  {protectionSummary.minVoltagePu} p.u.
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: protectionSummary.voltageCompliant ? 'var(--success)' : 'var(--danger)' }} className="font-mono">
+                  {protectionSummary.minVoltagePu} - {protectionSummary.maxVoltagePu} p.u.
                 </div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '2px' }}>Safe: [0.95 - 1.05] p.u.</div>
               </div>
@@ -141,10 +143,10 @@ export default function OptimizerSection({ engineData, batteryEnabled, participa
                       <Info size={10} color="var(--text-dim)"/>
                     </span>
                   </span>
-                  <CheckCircle2 size={14} color={batteryEnabled ? 'var(--success)' : 'var(--text-dim)'} />
+                  {protectionSummary.batterySoCCompliant ? <CheckCircle2 size={14} color="var(--success)" /> : <AlertTriangle size={14} color="var(--danger)" />}
                 </div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: batteryEnabled ? 'var(--success)' : 'var(--text-dim)' }} className="font-mono">
-                  {batteryEnabled ? '20% - 95% Safe' : 'BYPASSED'}
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: protectionSummary.batterySoCCompliant ? 'var(--success)' : 'var(--danger)' }} className="font-mono">
+                  {batteryEnabled ? `${Math.min(...batterySoCValues)}% - ${Math.max(...batterySoCValues)}%` : 'Battery disabled'}
                 </div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '2px' }}>Degradation Minimized</div>
               </div>
@@ -157,10 +159,10 @@ export default function OptimizerSection({ engineData, batteryEnabled, participa
                       <Info size={10} color="var(--text-dim)"/>
                     </span>
                   </span>
-                  <CheckCircle2 size={14} color="var(--success)" />
+                  {protectionSummary.slaCompliant ? <CheckCircle2 size={14} color="var(--success)" /> : <AlertTriangle size={14} color="var(--danger)" />}
                 </div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--success)' }} className="font-mono">
-                  100% SLA Met
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: protectionSummary.slaCompliant ? 'var(--success)' : 'var(--danger)' }} className="font-mono">
+                  {protectionSummary.slaCompliant ? 'Within flex limits' : 'Flex limit exceeded'}
                 </div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '2px' }}>Temp float ≤ +1.5°C</div>
               </div>
@@ -173,12 +175,12 @@ export default function OptimizerSection({ engineData, batteryEnabled, participa
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ai-purple)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Terminal size={14} />
-                MILP Solver Execution Console
-                <span className="tooltip-badge" data-tooltip="MILP (Mixed-Integer Linear Programming): Mathematical optimization solver calculating optimal DER vectors" style={{ marginLeft: '4px' }}>
+                Decision Engine Execution Console
+                <span className="tooltip-badge" data-tooltip="Backend solve output and measured dispatch constraints" style={{ marginLeft: '4px' }}>
                   <Info size={10} color="var(--text-dim)"/>
                 </span>
               </div>
-              <span style={{ fontSize: '0.65rem', color: 'var(--success)', fontWeight: 600 }} className="font-mono">Execution: 38 ms</span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--success)', fontWeight: 600 }} className="font-mono">{engineData.engine?.name || 'Local engine'}</span>
             </div>
 
             <div style={{ fontSize: '0.75rem', color: 'var(--console-text)', display: 'flex', flexDirection: 'column', gap: '6px', minHeight: '110px', maxHeight: '140px', overflowY: 'auto' }} className="font-mono">

@@ -4,6 +4,7 @@ import { DollarSign, TrendingDown, Leaf, Building, Award, BarChart2, Info } from
 
 export default function BeforeAfterKpiSection({ engineData }) {
   const { timeSeries, kpis, strategyBaselines } = engineData;
+  const isPlanFeasible = engineData.protectionSummary.thermalCompliant && engineData.protectionSummary.voltageCompliant && engineData.protectionSummary.batterySoCCompliant && engineData.protectionSummary.slaCompliant;
 
   // Tooltip for Before vs After
   const CustomCompareTooltip = ({ active, payload, label }) => {
@@ -34,7 +35,7 @@ export default function BeforeAfterKpiSection({ engineData }) {
               STAGE 4
             </span>
             <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-heading)' }}>
-              BEFORE vs AFTER — Empirical Visual Proof & Measurable Impact
+              BEFORE vs AFTER — Simulated Outcome & Measured Impact
             </h2>
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px' }}>
@@ -44,7 +45,7 @@ export default function BeforeAfterKpiSection({ engineData }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '6px 14px', borderRadius: '8px', color: '#3b82f6', fontSize: '0.8rem', fontWeight: 600 }}>
           <Award size={16} />
-          <span>Empirical Proof Verified</span>
+          <span>{isPlanFeasible ? 'Modeled constraints pass' : 'Modeled constraints not met'}</span>
         </div>
       </div>
 
@@ -54,19 +55,15 @@ export default function BeforeAfterKpiSection({ engineData }) {
         {/* KPI 1: Cost Savings */}
         <div style={{ background: 'var(--bg-card-grad)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '16px', borderRadius: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Daily Cost Savings</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Daily Operating Cost Change</span>
             <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <DollarSign size={16} color="var(--success)" />
             </div>
           </div>
-          <div style={{ fontSize: kpis.dailySavingsRs > 0 ? '1.4rem' : '1.05rem', fontWeight: 800, color: kpis.dailySavingsRs > 0 ? 'var(--success)' : 'var(--text-muted)' }} className="font-mono">
-            {kpis.dailySavingsRs > 0 ? (
-              <>₹{kpis.dailySavingsRs.toLocaleString()} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/ day</span></>
-            ) : (
-              '₹0 (no shifting needed)'
-            )}
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: kpis.dailySavingsRs >= 0 ? 'var(--success)' : 'var(--danger)' }} className="font-mono">
+            {kpis.dailySavingsRs >= 0 ? 'Lower by ' : 'Higher by '}₹{Math.abs(kpis.dailySavingsRs).toLocaleString()} / day
           </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Avoided spot market & peak charges</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Modeled cost: ₹{kpis.baselineDailyCostRs.toLocaleString()} → ₹{kpis.optimizedDailyCostRs.toLocaleString()} / day</div>
         </div>
 
         {/* KPI 2: Peak Demand Shaved */}
@@ -94,9 +91,9 @@ export default function BeforeAfterKpiSection({ engineData }) {
             </div>
           </div>
           <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ai-purple)' }} className="font-mono">
-            {kpis.co2SavedTons} Tons <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CO₂e</span>
+            {kpis.co2SavedTons == null ? 'Not modeled' : `${kpis.co2SavedTons} Tons CO₂e`}
           </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Avoided diesel peaker generation</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Requires a generation emissions model</div>
         </div>
 
         {/* KPI 4: Capex Deferral */}
@@ -107,10 +104,10 @@ export default function BeforeAfterKpiSection({ engineData }) {
               <Building size={16} color="var(--warning)" />
             </div>
           </div>
-          <div style={{ fontSize: kpis.capexDeferralLakhs > 0 ? '1.4rem' : '1.05rem', fontWeight: 800, color: kpis.capexDeferralLakhs > 0 ? 'var(--warning)' : 'var(--text-muted)' }} className="font-mono">
-            {kpis.capexDeferralLakhs > 0 ? `₹${kpis.capexDeferralLakhs} Lakhs` : '₹0 (no shifting needed)'}
+          <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-muted)' }} className="font-mono">
+            {kpis.capexDeferralLakhs == null ? 'Not modeled' : `₹${kpis.capexDeferralLakhs} Lakhs`}
           </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Substation upgrade deferred 3+ yrs</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Requires asset investment assumptions</div>
         </div>
 
       </div>

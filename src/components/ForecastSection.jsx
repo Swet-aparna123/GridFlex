@@ -1,11 +1,18 @@
 import React from 'react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, CartesianGrid } from 'recharts';
 import { SCENARIOS } from '../engine/gridflexEngine';
 import { AlertTriangle, ShieldAlert, Info } from 'lucide-react';
 
 export default function ForecastSection({ scenarioId, engineData }) {
   const scenario = SCENARIOS[scenarioId];
   const { timeSeries, kpis } = engineData;
+  const riskWindowBounds = scenario.riskTimeWindow.includes(' - ') ? scenario.riskTimeWindow.split(' - ') : null;
+  const baselineViolations = [];
+  if (kpis.baselineMaxOverloadMW > 0) baselineViolations.push(`Transformer overload: +${kpis.baselineMaxOverloadMW} MW over 4.2 MW rating`);
+  if (kpis.baselineMinVoltage < 0.95) baselineViolations.push(`Low voltage: ${kpis.baselineMinVoltage} p.u. below 0.950 p.u. limit`);
+  if (kpis.baselineMaxVoltage > 1.05) baselineViolations.push(`High voltage: ${kpis.baselineMaxVoltage} p.u. above 1.050 p.u. limit`);
+  const baselineHasViolation = baselineViolations.length > 0;
+  if (baselineViolations.length === 0) baselineViolations.push('No modeled thermal or voltage limit breach in the baseline profile.');
 
   // Custom Tooltip with uncertainty bounds
   const CustomTooltip = ({ active, payload, label }) => {
@@ -32,8 +39,8 @@ export default function ForecastSection({ scenarioId, engineData }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '3px 10px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
-              STAGE 1
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '3px 10px', borderRadius: '4px', background: baselineHasViolation ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)', color: baselineHasViolation ? 'var(--danger)' : 'var(--success)', border: `1px solid ${baselineHasViolation ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.3)'}` }}>
+              {baselineHasViolation ? 'STAGE 1 · RISK DETECTED' : 'BASELINE · NORMAL'}
             </span>
             <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-heading)' }}>
               WHAT WILL HAPPEN? — Physics-Based Predictive Load & Risk Forecast
@@ -44,8 +51,8 @@ export default function ForecastSection({ scenarioId, engineData }) {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '6px 14px', borderRadius: '8px', color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}>
-          <AlertTriangle size={16} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: baselineHasViolation ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.12)', border: `1px solid ${baselineHasViolation ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`, padding: '6px 14px', borderRadius: '8px', color: baselineHasViolation ? 'var(--danger)' : 'var(--success)', fontSize: '0.8rem', fontWeight: 600 }}>
+          {baselineHasViolation ? <AlertTriangle size={16} /> : <Info size={16} />}
           <span>Predicted Risk Window: {scenario.riskTimeWindow}</span>
         </div>
       </div>
@@ -76,6 +83,19 @@ export default function ForecastSection({ scenarioId, engineData }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                {riskWindowBounds && (
+                  <ReferenceArea
+                    x1={riskWindowBounds[0]}
+                    x2={riskWindowBounds[1]}
+                    y1={0}
+                    y2={6}
+                    fill="#ef4444"
+                    fillOpacity={0.12}
+                    stroke="#ef4444"
+                    strokeOpacity={0.45}
+                    label={{ value: 'PREDICTED RISK WINDOW', fill: '#ef4444', fontSize: 10, position: 'insideTop' }}
+                  />
+                )}
                 <XAxis dataKey="time" stroke="var(--chart-axis)" fontSize={11} interval={5} />
                 <YAxis stroke="var(--chart-axis)" fontSize={11} domain={[0, 6]} />
                 <Tooltip content={<CustomTooltip />} />
@@ -107,7 +127,7 @@ export default function ForecastSection({ scenarioId, engineData }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div style={{ background: 'var(--bg-panel-inner)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Peak Shortfall Gap</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Peak Thermal Gap</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--danger)' }} className="font-mono">
                   +{kpis.baselineMaxOverloadMW} MW
                 </div>
@@ -115,11 +135,11 @@ export default function ForecastSection({ scenarioId, engineData }) {
 
               <div style={{ background: 'var(--bg-panel-inner)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  Predicted Voltage Sag
+                  Baseline Voltage Range
                   <span className="tooltip-badge" data-tooltip="Per-Unit voltage relative to nominal 11kV grid rating" style={{ marginLeft: '4px' }}><Info size={11} color="var(--text-dim)"/></span>
                 </div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--warning)' }} className="font-mono">
-                  {kpis.baselineMinVoltage} p.u.
+                  {kpis.baselineMinVoltage} - {kpis.baselineMaxVoltage} p.u.
                 </div>
               </div>
             </div>
@@ -131,7 +151,7 @@ export default function ForecastSection({ scenarioId, engineData }) {
               Feeder Violations (Do Nothing Baseline):
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {scenario.baselineViolations.map((v, idx) => (
+              {baselineViolations.map((v, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--danger)', background: 'rgba(239, 68, 68, 0.1)', padding: '6px 10px', borderRadius: '6px' }}>
                   <AlertTriangle size={14} />
                   <span>{v}</span>
@@ -146,7 +166,7 @@ export default function ForecastSection({ scenarioId, engineData }) {
               <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-heading)' }}>
                 Available Flexibility Inventory:
               </div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--ai-purple)', fontWeight: 600 }}>Total: 1.85 MW Flex</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--ai-purple)', fontWeight: 600 }}>Up to 1.85 MW Flex</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px', fontSize: '0.72rem', textTransform: 'uppercase', textAlign: 'center' }} className="font-mono">

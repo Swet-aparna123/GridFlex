@@ -149,11 +149,11 @@ export default function Header({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#8b5cf6' }}>
             <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.7rem' }}>2</span>
-            <span><strong>Optimize:</strong> MILP Dispatch Solution</span>
+            <span><strong>Optimize:</strong> Constraint-Aware Dispatch</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981' }}>
             <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.7rem' }}>3</span>
-            <span><strong>Approve:</strong> Automated Signal Gate</span>
+            <span><strong>Approve:</strong> Operator Review Gate</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b' }}>
             <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.7rem' }}>4</span>
@@ -300,7 +300,12 @@ export default function Header({
             ) : isEngineSolving ? (
               <div style={{ color: 'var(--ai-purple)', fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Activity size={14} className="animate-spin" />
-                <span>SOLVING MILP...</span>
+                <span>RE-SOLVING...</span>
+              </div>
+            ) : scenario === 'normal' ? (
+              <div className="pulse-badge-success">
+                <ShieldCheck size={14} />
+                <span>NORMAL OPERATION</span>
               </div>
             ) : (
               <div className="pulse-badge-danger">

@@ -41,7 +41,28 @@ export default function ScenarioSelector({
       </div>
 
       {/* Scenario Presets Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+
+        <div
+          onClick={() => setScenarioId('normal')}
+          className="glass-panel glass-card-interactive"
+          style={{
+            padding: '14px',
+            border: scenarioId === 'normal' ? '2px solid var(--success)' : '1px solid var(--border-color)',
+            background: scenarioId === 'normal' ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-panel-subtle)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)' }}>
+              Normal Feeder
+            </span>
+            {scenarioId === 'normal' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }} />}
+          </div>
+          <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '4px', color: 'var(--text-heading)' }}>Baseline Operation</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            View normal feeder demand and solar output before introducing a stress event.
+          </div>
+        </div>
         
         {/* Scenario 1: Cloud Event */}
         <div
@@ -61,7 +82,7 @@ export default function ScenarioSelector({
           </div>
           <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '4px', color: 'var(--text-heading)' }}>Cloud Event (Sudden Solar Drop)</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Solar drops from 2.5 MW → 0.2 MW during midday peak (12:30-14:30), causing 130% transformer overload (+1.25 MW gap).
+            A sudden midday solar drop overlaps with commercial demand, creating a steep net-load ramp.
           </div>
         </div>
 
@@ -91,7 +112,7 @@ export default function ScenarioSelector({
             <span>Evening Peak (EV + Residential)</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Unmanaged EV charging & AC load surge as solar drops to 0 (18:00-21:30), causing <strong style={{ color: 'var(--danger)' }}>130% transformer overload (+1.25 MW gap)</strong>.
+            Unmanaged EV charging and cooling demand rise while solar output fades through the evening peak.
           </div>
         </div>
 
@@ -113,7 +134,7 @@ export default function ScenarioSelector({
           </div>
           <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '4px', color: 'var(--text-heading)' }}>Solar Over-Generation</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Excess solar PV during low load (11:00-13:30) causes reverse power flow (-1.2 MW) & overvoltage swell.
+            High rooftop solar generation during low midday demand creates reverse-flow and overvoltage risk.
           </div>
         </div>
 
@@ -185,7 +206,7 @@ export default function ScenarioSelector({
             </div>
             <input
               type="range"
-              min="10"
+              min="20"
               max="95"
               step="5"
               value={batteryInitialSoC}
