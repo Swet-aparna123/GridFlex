@@ -1,6 +1,6 @@
 import { CONFIG, LOAD_ARCHETYPES } from "./config.js";
-import { makeLoad } from "./loads.js";
-import { effectiveReserveSoc, optimize } from "./dispatch.js";
+import { makeLoad, tankFeasible } from "./loads.js";
+import { effectiveReserveSoc, optimize, validatePlan } from "./dispatch.js";
 import { buildStrategyBaselines, calculateKpis, forecast as createForecast } from "../analytics/index.js";
 
 export const TIME_LABELS = Array.from({ length: CONFIG.timing.stepsPerDay }, (_, step) => {
@@ -86,32 +86,61 @@ function seededRandom(seed) {
   };
 }
 
-function syntheticHistory(baselineNetKw, scenarioId, days = 7) {
-  const seed = [...scenarioId].reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 7);
-  const random = seededRandom(seed);
-  return Array.from({ length: days }, () => baselineNetKw.map((value) => {
-    const noiseKw = (random() - 0.5) * 100;
-    return Number((value + noiseKw).toFixed(3));
-  })).flat();
+function hash(value) {
+  return [...value].reduce((result, character) => (result * 31 + character.charCodeAt(0)) >>> 0, 7);
 }
 
-function solveCore({
-  scenarioId, batteryEnabled, participationRate, batteryInitialSoC,
-  feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled, forecastBandKw,
-}) {
-  const profile = generateRawProfiles(scenarioId);
-  const stepCount = CONFIG.timing.stepsPerDay;
+function syntheticHistoryProfiles(scenarioId, days = 7) {
+  const ordinary = generateRawProfiles("normal");
+  const random = seededRandom(hash(scenarioId));
+  return Array.from({ length: days }, () => {
+    const solarScale = 0.7 + 0.3 * random();
+    const loadScale = 0.95 + 0.1 * random();
+    return {
+      baseLoad: ordinary.baseLoad.map((value, step) => {
+        const eveningSpike = scenarioId === "evening_peak" && step >= 36 && step <= 43
+          ? 0.9 * Math.sin(((step - 36) / 7) * Math.PI)
+          : 0;
+        return Number(((value + eveningSpike) * loadScale).toFixed(3));
+      }),
+      evDemand: ordinary.evDemand.map((value, step) => {
+        const eveningSpike = scenarioId === "evening_peak" && step >= 36 && step <= 43
+          ? 0.8 * Math.sin(((step - 36) / 7) * Math.PI)
+          : 0;
+        return Number(((value + eveningSpike) * loadScale).toFixed(3));
+      }),
+      hvacDemand: ordinary.hvacDemand.map((value, step) => {
+        const eveningSpike = scenarioId === "evening_peak" && step >= 36 && step <= 43
+          ? 0.58 * Math.sin(((step - 36) / 7) * Math.PI)
+          : 0;
+        return Number(((value + eveningSpike) * loadScale).toFixed(3));
+      }),
+      agDemand: ordinary.agDemand.map((value) => Number((value * loadScale).toFixed(3))),
+      solarGen: ordinary.solarGen.map((value, step) => {
+        const eveningScale = scenarioId === "evening_peak" && step >= 36 && step <= 43
+          ? Math.max(0, 1 - (step - 36) / 3)
+          : 1;
+        return Number((value * solarScale * eveningScale).toFixed(3));
+      }),
+    };
+  });
+}
+
+function profileNetKw(profile) {
+  return profile.baseLoad.map((base, step) =>
+    (base + profile.evDemand[step] + profile.hvacDemand[step] + profile.agDemand[step] - profile.solarGen[step]) * 1000,
+  );
+}
+
+function createLoads(profile) {
   const dt = CONFIG.timing.stepHours;
-  const capacityKwh = batteryCapacityMWh * 1000;
-  const voltagePlanningLimitKw = feederCapacityMW * CONFIG.feeder.plannedLoadingFraction * 1000;
   const kw = (series) => series.map((value) => value * 1000);
   const baselineEv = kw(profile.evDemand);
   const baselineHvac = kw(profile.hvacDemand);
   const baselineAg = kw(profile.agDemand);
   const outflow = baselineAg.map((loadKw) => loadKw * dt * LOAD_ARCHETYPES.water_pump.tank.litersPerKwh);
   const ratedHeadroom = CONFIG.loadRatings.recoveryHeadroomFactor;
-
-  const loads = [
+  return [
     makeLoad({
       id: "neighbourhood-ev", type: "e_rickshaw", baselineKw: baselineEv,
       powerKw: max(baselineEv) * ratedHeadroom, flexibleFraction: LOAD_ARCHETYPES.e_rickshaw.flexibleFraction,
@@ -127,13 +156,83 @@ function solveCore({
       powerKw: max(baselineHvac) * ratedHeadroom, flexibleFraction: LOAD_ARCHETYPES.fan_cooler.flexibleFraction,
     }),
   ];
+}
 
-  const historyBaselineNetKw = profile.baseLoad.map((base, step) =>
-    (base + profile.evDemand[step] + profile.hvacDemand[step] + profile.agDemand[step] - profile.solarGen[step]) * 1000,
-  );
-  const forecastResult = createForecast({ historyKw: syntheticHistory(historyBaselineNetKw, scenarioId) });
-  const dispatchBandKw = forecastBandKw ?? forecastResult.maxBandKw;
+function selectRiskSteps(scenarioId, forecastKw, limitKw) {
+  const riskWindow = SCENARIOS[scenarioId].riskTimeWindow;
+  const bounds = riskWindow.match(/^(\d{2}:\d{2}) - (\d{2}:\d{2})$/);
+  if (bounds) {
+    const toStep = (time) => {
+      const [hour, minute] = time.split(":").map(Number);
+      return hour * 2 + (minute >= 30 ? 1 : 0);
+    };
+    const first = toStep(bounds[1]);
+    const last = toStep(bounds[2]);
+    return Array.from({ length: Math.max(0, last - first + 1) }, (_, offset) => first + offset);
+  }
+  const highRisk = forecastKw.map((value, step) => value >= limitKw * 0.8 ? step : -1).filter((step) => step >= 0);
+  return highRisk.length ? highRisk : forecastKw.map((_, step) => step);
+}
+
+function applyPlannedMoves(plannedMoves, loads, participationRate, dt) {
+  const schedules = loads.map((load) => ({
+    ...load,
+    sched: [...load.baselineKw],
+    movable: load.baselineKw.map((value) => value * load.flexibleFraction * participationRate),
+  }));
+  const appliedMoves = [];
+
+  for (const move of plannedMoves) {
+    const load = schedules.find((item) => item.id === move.loadId);
+    if (!load) continue;
+    let amount = Math.min(move.kw, load.movable[move.fromStep], load.powerKw - load.sched[move.toStep]);
+    let applied = 0;
+    for (let attempt = 0; attempt < 8 && amount > 1e-6; attempt++, amount /= 2) {
+      load.sched[move.fromStep] -= amount;
+      load.sched[move.toStep] += amount;
+      if (tankFeasible(load, load.sched, dt)) { applied = amount; break; }
+      load.sched[move.fromStep] += amount;
+      load.sched[move.toStep] -= amount;
+    }
+    if (applied <= 1e-6) continue;
+    load.movable[move.fromStep] -= applied;
+    appliedMoves.push({ ...move, kw: applied });
+  }
+
+  return {
+    schedules: schedules.map(({ id, sched }) => ({ id, sched })),
+    moves: appliedMoves,
+  };
+}
+
+function solveCore({
+  scenarioId, batteryEnabled, participationRate, batteryInitialSoC,
+  feederCapacityMW, batteryCapacityMWh, batteryMaxPowerMW, loadShiftEnabled, forecastBandKw,
+}) {
+  const profile = generateRawProfiles(scenarioId);
+  const stepCount = CONFIG.timing.stepsPerDay;
+  const dt = CONFIG.timing.stepHours;
+  const capacityKwh = batteryCapacityMWh * 1000;
+  const voltagePlanningLimitKw = feederCapacityMW * CONFIG.feeder.plannedLoadingFraction * 1000;
+  const kw = (series) => series.map((value) => value * 1000);
+  const loads = createLoads(profile);
+  const baselineEv = kw(profile.evDemand);
+  const baselineHvac = kw(profile.hvacDemand);
+  const baselineAg = kw(profile.agDemand);
+  const historyProfiles = syntheticHistoryProfiles(scenarioId);
+  const historyKw = historyProfiles.flatMap(profileNetKw);
+  const forecastProfile = historyProfiles.at(-1);
+  const forecastResult = createForecast({ historyKw });
+  const riskSteps = selectRiskSteps(scenarioId, forecastResult.forecastKw, voltagePlanningLimitKw);
+  const bandAtRiskKw = Math.max(...riskSteps.map((step) => forecastResult.bandKw[step]));
+  const dispatchBandKw = forecastBandKw ?? bandAtRiskKw;
   const reserveSoc = effectiveReserveSoc(dispatchBandKw, voltagePlanningLimitKw);
+  const minVoltageSafeKw = feederCapacityMW * (0.5 - 0.05 / 0.138) * 1000;
+  const forecastLoads = createLoads(forecastProfile);
+  const upperBandSteps = scenarioId === "normal" ? new Set() : new Set(riskSteps);
+  const planningBaseKw = kw(forecastProfile.baseLoad).map((value, step) =>
+    value + (upperBandSteps.has(step) ? forecastResult.bandKw[step] : 0),
+  );
   const battery = {
     ...CONFIG.battery,
     enabled: batteryEnabled,
@@ -142,8 +241,9 @@ function solveCore({
     maxDischargeKw: Math.min(CONFIG.battery.maxDischargeKw, batteryMaxPowerMW * 1000),
     initialSoc: batteryInitialSoC / 100,
   };
-  const plan = optimize({
-    baseKw: kw(profile.baseLoad), solarKw: kw(profile.solarGen), loads,
+  const forecastPlan = optimize({
+    // Plan against the forecast's upper band in its stated risk window.
+    baseKw: planningBaseKw, solarKw: kw(forecastProfile.solarGen), loads: forecastLoads,
     limitKw: voltagePlanningLimitKw,
     battery,
     options: {
@@ -153,22 +253,77 @@ function solveCore({
       forecastBandKw: dispatchBandKw,
       initialSocKwh: batteryInitialSoC / 100 * capacityKwh,
       allowAdvance: true,
+      minNetKw: minVoltageSafeKw,
     },
   });
 
-  const solarCurtailmentKw = Array(stepCount).fill(0);
-  const netAfterKw = [...plan.netAfter];
-  const minVoltageSafeKw = feederCapacityMW * (0.5 - 0.05 / 0.138) * 1000;
-  if (scenarioId === "solar_surge") {
-    for (let step = 0; step < stepCount; step++) {
-      if (netAfterKw[step] < minVoltageSafeKw) {
-        solarCurtailmentKw[step] = Math.min(profile.solarGen[step] * 1000, minVoltageSafeKw - netAfterKw[step]);
-        netAfterKw[step] += solarCurtailmentKw[step];
-      }
-    }
-  }
+  const actualMoveResult = applyPlannedMoves(
+    forecastPlan.moves,
+    loads,
+    Math.max(0, Math.min(100, participationRate)) / 100,
+    dt,
+  );
+  const actualLoadKw = Array.from({ length: stepCount }, (_, step) =>
+    actualMoveResult.schedules.reduce((total, item) => total + item.sched[step], 0),
+  );
+  const baselineLoadKw = loads.reduce((total, load) =>
+    total.map((value, step) => value + load.baselineKw[step]),
+  Array(stepCount).fill(0));
+  const baselineNetKw = kw(profile.baseLoad).map((value, step) =>
+    value - kw(profile.solarGen)[step] + baselineLoadKw[step],
+  );
+  const solarCurtailmentKw = forecastPlan.solarCurtailmentKw.map((value, step) =>
+    Math.min(value, kw(profile.solarGen)[step]),
+  );
+  const netAfterKw = baselineNetKw.map((value, step) =>
+    value + actualLoadKw[step] - baselineLoadKw[step]
+      - forecastPlan.battery.dischargeKw[step] + forecastPlan.battery.chargeKw[step]
+      + solarCurtailmentKw[step],
+  );
+  const actualUnservedKwh = netAfterKw.reduce((total, value) =>
+    total + Math.max(0, value - voltagePlanningLimitKw) * dt,
+  0);
+  const reverseFlowGapKwhEquivalent = netAfterKw.reduce((total, value) =>
+    total + Math.max(0, minVoltageSafeKw - value) * dt,
+  0);
+  const plan = {
+    ...forecastPlan,
+    netBefore: baselineNetKw,
+    netAfter: netAfterKw,
+    moves: actualMoveResult.moves,
+    schedules: actualMoveResult.schedules,
+    solarCurtailmentKw,
+    metrics: {
+      ...forecastPlan.metrics,
+      peakBeforeKw: max(baselineNetKw),
+      peakAfterKw: max(netAfterKw),
+      unservedKwh: actualUnservedKwh,
+      overloadStepsBefore: baselineNetKw.filter((value) => value > voltagePlanningLimitKw + 1e-6).length,
+      overloadStepsAfter: netAfterKw.filter((value) => value > voltagePlanningLimitKw + 1e-6).length,
+      curtailedKwh: solarCurtailmentKw.reduce((total, value) => total + value * dt, 0),
+      shiftedKwh: actualMoveResult.moves.reduce((total, move) => total + move.kw * dt, 0),
+      forecastShortfallKwh: actualUnservedKwh,
+      reverseFlowGapKwhEquivalent,
+    },
+  };
+  plan.validation = validatePlan(plan, { loads, limitKw: voltagePlanningLimitKw, battery, dt, config: CONFIG, minNetKw: minVoltageSafeKw });
 
-  const baselineNetKw = plan.netBefore;
+  const mapePct = baselineNetKw.reduce((total, actual, step) =>
+    total + Math.abs(forecastResult.forecastKw[step] - actual) / Math.max(1, Math.abs(actual)),
+  0) / baselineNetKw.length * 100;
+  const coveredSteps = baselineNetKw.filter((actual, step) =>
+    actual >= forecastResult.lowerKw[step] && actual <= forecastResult.upperKw[step],
+  ).length;
+  forecastResult.mapePct = round(mapePct, 1);
+  forecastResult.bandCoveragePct = round(coveredSteps / baselineNetKw.length * 100, 1);
+  forecastResult.coveredSteps = coveredSteps;
+  forecastResult.totalSteps = baselineNetKw.length;
+  forecastResult.shortfallKwh = round(actualUnservedKwh, 1);
+  forecastResult.reverseFlowGapKwhEquivalent = round(reverseFlowGapKwhEquivalent, 1);
+  forecastResult.bandAtRiskKw = round(bandAtRiskKw, 1);
+  forecastResult.riskSteps = riskSteps;
+  forecastResult.planningProfile = "forecast";
+
   const baselineNetMw = baselineNetKw.map((value) => value / 1000);
   const optimizedNetMw = netAfterKw.map((value) => value / 1000);
   const baselineVoltage = baselineNetMw.map((value) => voltageAt(value, feederCapacityMW));

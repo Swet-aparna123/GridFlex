@@ -39,14 +39,14 @@ export const CONFIG = {
   },
   penalties: { overloadRsPerKwSlot: 1.45 },
   forecast: {
-    // Band grows with horizon: sigma(t) = baseBandKw * (1 + horizonGrowth * t/stepsPerDay)
+    // Band = max(baseBandKw, z * historical residual sigma), grown over the horizon.
     z: 1.28,
-    baseBandKw: 350,
+    baseBandKw: 100,
     horizonGrowth: 1.0,
   },
   uncertaintyReserve: {
-    // extraReserveSoc = min(maxExtraSoc, gain * (bandKw / feederLimitKw))
-    gain: 1.5,
+    // extraReserveSoc = min(maxExtraSoc, gain * (risk-window band / planning limit))
+    gain: 0.45,
     maxExtraSoc: 0.20,
   },
   loss: {
@@ -74,8 +74,8 @@ export const PROVENANCE = {
   'tariff.legacyScaleFactor': `${P} (legacy)`,
   'penalties.overloadRsPerKwSlot': `${P} (1450 Rs/MW inline)`,
   'forecast.z': `${P} (forecast band multiplier)`,
-  'forecast.baseBandKw': `${P} (0.35 MW inline)`, 'forecast.horizonGrowth': P,
-  'uncertaintyReserve.gain': P, 'uncertaintyReserve.maxExtraSoc': P,
+  'forecast.baseBandKw': `${P} (reduced from 0.35 MW so historical residuals contribute to the band)`, 'forecast.horizonGrowth': P,
+  'uncertaintyReserve.gain': `${P} (tuned to preserve scenario-specific reserve variation)`, 'uncertaintyReserve.maxExtraSoc': P,
   'capital.capexDeferralRsPerKwPeak': sourced('capex_deferral_rs_per_kw_peak'),
   'emissions.gridKgCo2PerKwh': 'CEA CO2 Baseline Database v22.0, Table S, FY2025-26 weighted average (incl. RES and captive): https://cea.nic.in/wp-content/uploads/baseline/2026/09/User_Guide__Version_22.0.pdf',
   'loss.formula': 'Spec §21', 'loss.label': 'Spec §21',

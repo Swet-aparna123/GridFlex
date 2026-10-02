@@ -26,7 +26,7 @@ export function optimize({
   const {
     batteryEnabled = true, loadShiftEnabled = true,
     participationRate = 1, forecastBandKw = 0, initialSocKwh = battery.initialSoc * battery.capacityKwh,
-    allowAdvance = false,
+    allowAdvance = false, minNetKw = null,
   } = options;
 
   // working copies
@@ -78,6 +78,43 @@ export function optimize({
         }
       }
     }
+
+    // ---- 1b. Surplus absorption: pull flexible demand from later slots into low-net slots.
+    if (Number.isFinite(minNetKw)) {
+      const lowSlots = [...Array(T).keys()].sort((a, b) => net[a] - net[b]);
+      for (const t of lowSlots) {
+        for (const l of order) {
+          while (net[t] < minNetKw - EPS) {
+            let source = -1;
+            let bestNet = minNetKw + EPS;
+            const lastSource = Math.min(T - 1, t + l.maxShiftSteps, l.latestEnd);
+            for (let d = t + 1; d <= lastSource; d++) {
+              if (d < l.earliestStart || l.movable[d] <= EPS) continue;
+              if (l.blocked.has(`${d}>${t}`)) continue;
+              if (l.deadline != null && t > l.deadline) continue;
+              if (l.powerKw - l.sched[t] <= EPS) continue;
+              if (net[d] > bestNet) { source = d; bestNet = net[d]; }
+            }
+            if (source < 0) break;
+
+            let amt = Math.min(
+              minNetKw - net[t], l.movable[source],
+              l.powerKw - l.sched[t],
+            );
+            let applied = 0;
+            for (let k = 0; k < 6 && amt > EPS; k++, amt /= 2) {
+              l.sched[source] -= amt; l.sched[t] += amt;
+              if (tankFeasible(l, l.sched, dt)) { applied = amt; break; }
+              l.sched[source] += amt; l.sched[t] -= amt;
+            }
+            if (applied <= EPS) { l.blocked.add(`${source}>${t}`); continue; }
+            l.movable[source] -= applied;
+            net[source] -= applied; net[t] += applied;
+            moves.push({ loadId: l.id, type: l.type, fromStep: source, toStep: t, kw: applied });
+          }
+        }
+      }
+    }
   }
 
   // ---- 2. battery (reserve widened by forecast uncertainty)
@@ -98,6 +135,11 @@ export function optimize({
         const p = Math.min(want[t], availKwh * eta / dt);
         dischargeKw[t] = p; e -= p * dt / eta;
         net[t] -= p;
+      } else if (Number.isFinite(minNetKw) && net[t] < minNetKw - EPS && battery.maxChargeKw > 0) {
+        const surplusKw = minNetKw - net[t];
+        const roomKw = Math.max(0, maxKwh - e) / (dt * eta);
+        const p = Math.min(battery.maxChargeKw, surplusKw, roomKw);
+        chargeKw[t] = p; e += p * dt * eta; net[t] += p;
       } else {
         const futureNeed = want.slice(t + 1).reduce((s, w) => s + w * dt / eta, 0);
         const target = Math.min(maxKwh, reserveKwh + futureNeed);
@@ -113,6 +155,15 @@ export function optimize({
     soc.fill(e);
   }
 
+  // Curtail only the surplus left after flexible demand and battery charging.
+  const solarCurtailmentKw = Array(T).fill(0);
+  if (Number.isFinite(minNetKw)) {
+    for (let t = 0; t < T; t++) {
+      solarCurtailmentKw[t] = Math.min(Math.max(0, solarKw[t]), Math.max(0, minNetKw - net[t]));
+      net[t] += solarCurtailmentKw[t];
+    }
+  }
+
   const netAfter = net;
   const unservedKwh = netAfter.reduce((s, n) => s + Math.max(0, n - limitKw) * dt, 0);
   const plan = {
@@ -124,19 +175,22 @@ export function optimize({
       overloadStepsBefore: netBefore.filter((n) => n > limitKw + EPS).length,
       overloadStepsAfter: netAfter.filter((n) => n > limitKw + EPS).length,
       batteryDischargedKwh: dischargeKw.reduce((s, p) => s + p * dt, 0),
+      curtailedKwh: solarCurtailmentKw.reduce((s, p) => s + p * dt, 0),
       shiftedKwh: moves.reduce((s, m) => s + m.kw * dt, 0),
     },
+    solarCurtailmentKw,
   };
-  plan.validation = validatePlan(plan, { loads, limitKw, battery, dt, config });
+  plan.validation = validatePlan(plan, { loads, limitKw, battery, dt, config, minNetKw });
   return plan;
 }
 
 /** §17: single final check of the hard constraints, independent of the solver loop. */
-export function validatePlan(plan, { loads, battery, dt }) {
+export function validatePlan(plan, { loads, battery, dt, minNetKw = null }) {
   const byId = Object.fromEntries(plan.schedules.map((s) => [s.id, s.sched]));
   const checks = { energyConserved: true, criticalUntouched: true, optOutsExcluded: true,
     windowsAndDeadlines: true, ratedPower: true, tankLimits: true,
-    batteryReserve: true, batteryRates: true, noSimultaneousChargeDischarge: true };
+    batteryReserve: true, batteryRates: true, noSimultaneousChargeDischarge: true,
+    voltageSafe: !Number.isFinite(minNetKw) || plan.netAfter.every((value) => value >= minNetKw - EPS) };
   for (const l of loads) {
     const s = byId[l.id];
     const sum = (a) => a.reduce((x, y) => x + y, 0);

@@ -65,6 +65,8 @@ function toComparisonRow(name, color, result) {
     minVoltage: `${kpis.optimizedMinVoltage.toFixed(3)} p.u.`,
     violations: `${kpis.optimizedViolationCount} Breaches`,
     cost: `₹${kpis.optimizedDailyCostRs.toLocaleString('en-IN')}/day`,
+    unserved: `${Number(kpis.unservedKwh ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 1 })} kWh`,
+    curtailed: `${Number(kpis.curtailmentMWh ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 3 })} MWh`,
     status: isSafe(protectionSummary) ? 'SAFE' : 'INFEASIBLE',
     color,
   };

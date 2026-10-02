@@ -1,5 +1,5 @@
 import React from 'react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, Line, XAxis, YAxis, Tooltip, ReferenceLine, ReferenceArea, CartesianGrid } from 'recharts';
 import { SCENARIOS } from '../engine/gridflexEngine';
 import { AlertTriangle, ShieldAlert, Info } from 'lucide-react';
 
@@ -21,7 +21,7 @@ function CustomTooltip({ active, payload, label }) {
 
 export default function ForecastSection({ scenarioId, engineData }) {
   const scenario = SCENARIOS[scenarioId];
-  const { timeSeries, kpis } = engineData;
+  const { timeSeries, kpis, forecast } = engineData;
   const riskWindowBounds = scenario.riskTimeWindow.includes(' - ') ? scenario.riskTimeWindow.split(' - ') : null;
   const baselineViolations = [];
   if (kpis.baselineMaxOverloadMW > 0) baselineViolations.push(`Transformer overload: +${kpis.baselineMaxOverloadMW} MW over 4.2 MW rating`);
@@ -105,8 +105,19 @@ export default function ForecastSection({ scenarioId, engineData }) {
                 
                 <Area type="monotone" dataKey="solarGen" name="Solar Gen" stroke="#f59e0b" fillOpacity={0.2} fill="#f59e0b" unit="MW" />
                 <Area type="monotone" dataKey="forecastNetLoad" name="Seasonal-Naive Forecast" stroke="#ef4444" strokeWidth={2.8} fillOpacity={1} fill="url(#colorBaseline)" unit="MW" />
+                <Line type="monotone" dataKey="baselineNetLoad" name="Actual Net Load" stroke="#38bdf8" strokeWidth={2.2} strokeDasharray="6 3" dot={false} unit="MW" />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
+            <div style={{ flex: '1 1 130px', background: 'var(--bg-panel-inner)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Forecast MAPE</div>
+              <div className="font-mono" style={{ fontSize: '1rem', color: 'var(--text-heading)', fontWeight: 800 }}>{Number(forecast.mapePct ?? 0).toFixed(1)}%</div>
+            </div>
+            <div style={{ flex: '1 1 130px', background: 'var(--bg-panel-inner)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Band Coverage</div>
+              <div className="font-mono" style={{ fontSize: '1rem', color: 'var(--text-heading)', fontWeight: 800 }}>{Number(forecast.bandCoveragePct ?? 0).toFixed(1)}%</div>
+            </div>
           </div>
         </div>
 
@@ -123,6 +134,14 @@ export default function ForecastSection({ scenarioId, engineData }) {
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: '1.4', marginBottom: '12px' }}>
               {scenario.description}
             </p>
+            <div style={{ fontSize: '0.78rem', color: Number(forecast.shortfallKwh) > 0 ? 'var(--danger)' : 'var(--success)', marginBottom: '12px' }}>
+              Actual plan shortfall from forecast error: {Number(forecast.shortfallKwh ?? 0).toLocaleString()} kWh
+            </div>
+            {Number(forecast.reverseFlowGapKwhEquivalent) > 0 && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--danger)', marginBottom: '12px' }}>
+                Reverse-flow limit gap: {Number(forecast.reverseFlowGapKwhEquivalent).toLocaleString()} kWh-equivalent
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div style={{ background: 'var(--bg-panel-inner)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>

@@ -74,6 +74,6 @@ export function forecast({
     upperKw,
     bandKw,
     maxBandKw: Math.max(...bandKw),
-    note: 'PROTOTYPE: band = max(configured floor, z × sample std of day-over-day residuals), grown over the forecast horizon',
+    note: 'Seasonal-naive point estimate from the last historical day; band = max(configured floor, z * sample std of day-over-day residuals), grown over the horizon.',
   };
 }

@@ -91,7 +91,7 @@ export default function BeforeAfterKpiSection({ engineData }) {
           <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ai-purple)' }} className="font-mono">
             {kpis.co2SavedTons == null ? 'Not modeled' : `${kpis.co2SavedTons} Tons CO₂e`}
           </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Requires a generation emissions model</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>CEA FY2025-26 factor 0.675 kg/kWh</div>
         </div>
 
         {/* KPI 4: Capex Deferral */}
@@ -108,6 +108,34 @@ export default function BeforeAfterKpiSection({ engineData }) {
           <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Requires asset investment assumptions</div>
         </div>
 
+      </div>
+
+      {/* Operational impact KPI cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+        <div style={{ background: 'var(--bg-card-grad)', border: `1px solid ${kpis.unservedKwh > 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(16, 185, 129, 0.3)'}`, padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>Unserved Energy (kWh)</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: kpis.unservedKwh > 0 ? 'var(--danger)' : 'var(--success)' }} className="font-mono">
+            {kpis.unservedKwh > 0 ? `${Number(kpis.unservedKwh).toLocaleString()} kWh` : '0 kWh, fully served'}
+          </div>
+        </div>
+        <div style={{ background: 'var(--bg-card-grad)', border: '1px solid var(--border-color)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>Overload Hours</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-heading)' }} className="font-mono">{Number(kpis.overloadHours ?? 0).toFixed(1)} h</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>Baseline: {Number(kpis.baselineOverloadHours ?? 0).toFixed(1)} h</div>
+        </div>
+        <div style={{ background: 'var(--bg-card-grad)', border: '1px solid var(--border-color)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>Solar Curtailed (MWh)</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-heading)' }} className="font-mono">{Number(kpis.curtailmentMWh ?? 0).toFixed(3)} MWh</div>
+        </div>
+        <div style={{ background: 'var(--bg-card-grad)', border: '1px solid var(--border-color)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>Battery Cycles</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-heading)' }} className="font-mono">{Number(kpis.batteryCycles ?? 0).toFixed(3)}</div>
+        </div>
+        <div style={{ background: 'var(--bg-card-grad)', border: '1px solid var(--border-color)', padding: '16px', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>Est. Loss Reduction</div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-heading)' }} className="font-mono">{Number(kpis.lossReductionPct ?? 0).toFixed(1)}%</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '4px' }}>directional I²R estimate</div>
+        </div>
       </div>
 
       {/* Side-by-Side Comparison Charts */}
@@ -183,6 +211,8 @@ export default function BeforeAfterKpiSection({ engineData }) {
                 <th style={{ padding: '10px 14px', borderBottom: '1px solid var(--table-border)' }}>Min Voltage</th>
                 <th style={{ padding: '10px 14px', borderBottom: '1px solid var(--table-border)' }}>Grid Violations</th>
                 <th style={{ padding: '10px 14px', borderBottom: '1px solid var(--table-border)' }}>Daily Operating Cost</th>
+                <th style={{ padding: '10px 14px', borderBottom: '1px solid var(--table-border)' }}>Unserved (kWh)</th>
+                <th style={{ padding: '10px 14px', borderBottom: '1px solid var(--table-border)' }}>Curtailed (MWh)</th>
                 <th style={{ padding: '10px 14px', borderBottom: '1px solid var(--table-border)' }}>Protection Status</th>
               </tr>
             </thead>
@@ -194,6 +224,8 @@ export default function BeforeAfterKpiSection({ engineData }) {
                   <td style={{ padding: '10px 14px', color: 'var(--text-heading)' }} className="font-mono">{st.minVoltage}</td>
                   <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{st.violations}</td>
                   <td style={{ padding: '10px 14px', fontWeight: 600, color: idx === 3 ? 'var(--success)' : 'var(--text-heading)' }} className="font-mono">{st.cost}</td>
+                  <td style={{ padding: '10px 14px', color: Number.parseFloat(st.unserved) > 0 ? 'var(--danger)' : 'var(--success)' }} className="font-mono">{st.unserved}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-heading)' }} className="font-mono">{st.curtailed}</td>
                   <td style={{ padding: '10px 14px', fontWeight: 800, color: st.color }}>{st.status}</td>
                 </tr>
               ))}

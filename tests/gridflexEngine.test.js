@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { CONFIG } from '../src/engine/config.js';
 import { solveGridFlex } from '../src/engine/gridflexEngine.js';
 
 test('normal feeder starts within the modeled thermal and voltage limits', () => {
@@ -43,12 +44,30 @@ test('limited flexibility reports the unmet feeder stress instead of capping it'
   assert.notEqual(result.kpis.dailySavingsRs, 21700);
 });
 
-test('solar surge uses curtailment to keep modeled voltage within bounds', () => {
+test('solar surge absent from ordinary history is reported as forecast error', () => {
   const result = solveGridFlex({ scenarioId: 'solar_surge' });
 
-  assert.ok(result.timeSeries.some((slot) => slot.solarCurtailmentMW > 0));
-  assert.equal(result.protectionSummary.voltageCompliant, true);
-  assert.equal(result.kpis.optimizedViolationCount, 0);
+  const actualNetKw = result.timeSeries.map((slot) => slot.baselineNetLoad * 1000);
+  assert.ok(result.forecast.mapePct > 0, 'ordinary history does not contain the target solar surge');
+  assert.ok(result.forecast.bandCoveragePct < 100, 'the surprise can fall outside the historical band');
+  assert.ok(result.forecast.reverseFlowGapKwhEquivalent > 0, 'the unforecast reverse-flow constraint is reported');
+  assert.notDeepEqual(result.forecast.forecastKw, actualNetKw);
+});
+
+test('risk-window forecast bands produce distinct scenario reserves', () => {
+  const evening = solveGridFlex({ scenarioId: 'evening_peak', includeStrategyBaselines: false });
+  const cloud = solveGridFlex({ scenarioId: 'cloud_event', includeStrategyBaselines: false });
+  const normal = solveGridFlex({ scenarioId: 'normal', includeStrategyBaselines: false });
+
+  assert.notEqual(evening.forecast.reserveSoc, cloud.forecast.reserveSoc);
+  assert.notEqual(normal.forecast.reserveSoc, cloud.forecast.reserveSoc);
+  for (const result of [normal, evening, cloud]) {
+    assert.ok(result.forecast.reserveSoc >= 0.25 && result.forecast.reserveSoc <= 0.4);
+    assert.ok(result.forecast.reserveSoc < CONFIG.battery.minReserveSoc + CONFIG.uncertaintyReserve.maxExtraSoc,
+      'scenario reserve does not always hit the configured cap');
+    assert.ok(result.forecast.mapePct > 0);
+  }
+  assert.ok(cloud.forecast.shortfallKwh > 0, 'unforecast cloud stress is measured against actual demand');
 });
 
 test('an explicit forecast band controls the dispatch reserve', () => {

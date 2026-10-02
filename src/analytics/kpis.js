@@ -272,6 +272,14 @@ export function calculateKpis({
   const capexDeferralLakhs = deferredPeakKw * CONFIG.capital.capexDeferralRsPerKwPeak / 100000;
   const baselineDailyCost = costFor(baselineNetKw, feederCapacityKw);
   const optimizedDailyCost = costFor(optimizedNetKw, feederCapacityKw);
+  const stepHours = CONFIG.timing.stepHours;
+  const usableBatteryKwh = CONFIG.battery.capacityKwh
+    * (CONFIG.battery.maxSoc - CONFIG.battery.minReserveSoc);
+  const unservedKwh = Number.isFinite(plan?.metrics?.unservedKwh) ? plan.metrics.unservedKwh : 0;
+  const curtailmentMWh = (Array.isArray(timeSeries) ? timeSeries : []).reduce(
+    (total, slot) => total + (Number.isFinite(slot.solarCurtailmentMW) ? slot.solarCurtailmentMW : 0) * stepHours,
+    0,
+  );
 
   return {
     baselinePeakMW: Number((baselinePeakKw / KW_PER_MW).toFixed(2)),
@@ -285,6 +293,16 @@ export function calculateKpis({
     dailySavingsRs: Math.round(baselineDailyCost - optimizedDailyCost),
     co2SavedTons: Number(co2SavedTons.toFixed(3)),
     capexDeferralLakhs: Number(capexDeferralLakhs.toFixed(2)),
+    unservedKwh: Number(unservedKwh.toFixed(3)),
+    overloadHours: optimizedNetKw.filter((value) => value > feederCapacityKw).length * stepHours,
+    baselineOverloadHours: baselineNetKw.filter((value) => value > feederCapacityKw).length * stepHours,
+    curtailmentMWh: Number(curtailmentMWh.toFixed(3)),
+    batteryCycles: usableBatteryKwh > 0
+      ? Number((plan.metrics.batteryDischargedKwh / usableBatteryKwh).toFixed(3))
+      : 0,
+    lossReductionPct: baselinePeakKw > 0
+      ? 100 * (1 - (optimizedPeakKw / baselinePeakKw) ** 2)
+      : 0,
     baselineDailyCostRs: Math.round(baselineDailyCost),
     optimizedDailyCostRs: Math.round(optimizedDailyCost),
     totalBessDischargedMWh: Number((plan.metrics.batteryDischargedKwh / KW_PER_MW).toFixed(2)),
