@@ -1,3 +1,5 @@
+import 'dotenv/config';
+import { GoogleGenAI } from '@google/genai';
 import { createServer } from 'node:http';
 import { CONFIG } from '../src/engine/config.js';
 import { SCENARIOS, solveGridFlex } from '../src/engine/gridflexEngine.js';
@@ -109,6 +111,34 @@ const server = createServer(async (request, response) => {
       sendJson(response, 200, { forecast: forecastResult, kpis });
     } catch (error) {
       sendJson(response, error.statusCode || 500, { error: error.message || 'GridFlex analytics failed.' });
+    }
+    return;
+  }
+
+  if (request.method === 'POST' && pathname === '/api/grid-advice') {
+    try {
+      const payload = await readJson(request);
+      const { scenario, kpis, protection } = payload ?? {};
+      if (!scenario || !kpis || !protection) {
+        sendJson(response, 400, { error: 'Scenario and simulation results are required.' });
+        return;
+      }
+      if (!process.env.GEMINI_API_KEY) {
+        sendJson(response, 503, { error: 'GEMINI_API_KEY is missing from the project root .env file.' });
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const result = await ai.interactions.create({
+        model: 'gemini-3.8-flash',
+        system_instruction: 'You are GridFlex, an assistant that explains synthetic distribution-grid simulation results to utility operators. Use only the supplied figures. Do not invent measurements or claim the simulation is a real grid. Be concise: give a short summary, key figures, and one operational caveat. Do not issue control commands.',
+        input: JSON.stringify({ scenario, kpis, protection }),
+        store: false,
+      });
+      sendJson(response, 200, { text: result.output_text });
+    } catch (error) {
+      console.error('Gemini request failed:', error?.message ?? error);
+      sendJson(response, 502, { error: 'Gemini could not generate advice. Check the API key, model access, and network, then try again.' });
     }
     return;
   }

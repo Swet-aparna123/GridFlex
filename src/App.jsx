@@ -8,6 +8,8 @@ import ApprovalSection from './components/ApprovalSection';
 import BeforeAfterKpiSection from './components/BeforeAfterKpiSection';
 import ConsumerView from './components/ConsumerView';
 import StoryModal from './components/StoryModal';
+import GeminiAdvisor from './components/GeminiAdvisor';
+import { SCENARIOS } from './engine/gridflexEngine';
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
@@ -194,6 +196,12 @@ export default function App() {
               engineData={engineData}
               batteryEnabled={batteryEnabled}
               participationRate={participationRate}
+            />}
+
+            {engineData && <GeminiAdvisor
+              scenario={SCENARIOS[scenarioId]}
+              kpis={engineData.kpis}
+              protection={engineData.protectionSummary}
             />}
 
             {/* Stage 3: Operator Plan Approval Gateway */}
