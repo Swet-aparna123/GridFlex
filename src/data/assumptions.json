@@ -1,0 +1,54 @@
+{
+    "tariff_peak_rs_per_kwh":  {
+                                   "value":  9.5,
+                                   "note":  "17:00-22:00 evening peak tariff slab"
+                               },
+    "tariff_offpeak_rs_per_kwh":  {
+                                      "value":  4,
+                                      "note":  "10:00-15:00 solar-hours off-peak tariff slab"
+                                  },
+    "tariff_normal_rs_per_kwh":  {
+                                     "value":  6.5,
+                                     "note":  "all other hours"
+                                 },
+    "battery_capex_rs_per_kwh":  {
+                                     "value":  22000,
+                                     "note":  "typical Indian BESS installed cost, â‚¹/kWh (verify current quote)"
+                                 },
+    "battery_cycle_life":  {
+                               "value":  4000,
+                               "note":  "typical LFP cycle life to 80% DoD"
+                           },
+    "grid_co2_factor_kg_per_kwh":  {
+                                       "value":  0.82,
+                                       "note":  "CEA all-India grid emission factor, approx (verify latest CEA baseline)"
+                                   },
+    "capex_deferral_rs_per_kw_peak":  {
+                                          "value":  9500,
+                                          "note":  "illustrative avoided/deferred feeder upgrade cost per kW of peak shaved"
+                                      },
+    "incentive_rs_per_kwh_shifted":  {
+                                         "value":  2,
+                                         "note":  "illustrative consumer incentive for participating in a shift event"
+                                     },
+    "battery_round_trip_efficiency":  {
+                                          "value":  0.94,
+                                          "note":  "assumed charge/discharge efficiency"
+                                      },
+    "feeder_capacity_mw":  {
+                               "value":  4.2,
+                               "note":  "simulated feeder thermal rating, matches engine default"
+                           },
+    "battery_capacity_mwh":  {
+                                 "value":  1.5,
+                                 "note":  "shared community battery, matches engine default"
+                             },
+    "battery_max_power_mw":  {
+                                 "value":  0.75,
+                                 "note":  "shared community battery max charge/discharge rate"
+                             },
+    "grid_co2_factor_kg_per_kwh_cea_fy2025_26":  {
+                                                     "value":  0.675,
+                                                     "note":  "CEA CO2 Baseline Database Version 22.0, Table S: FY2025-26 weighted average including RES and captive generation; User Guide published August 2026. https://cea.nic.in/wp-content/uploads/baseline/2026/09/User_Guide__Version_22.0.pdf"
+                                                 }
+}

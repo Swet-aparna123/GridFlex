@@ -28,6 +28,12 @@ export function computeKpis(plan, baseline, ctx = {}) {
   const peak = (values) => values.length ? Math.max(...values) : 0;
   const peakBase = peak(baselineNetKw);
   const peakNew = peak(netKw);
+  const baselineGridImportKwh = baselineNetKw.reduce((total, kw) => total + Math.max(0, kw) * stepHours, 0);
+  const newGridImportKwh = netKw.reduce((total, kw) => total + Math.max(0, kw) * stepHours, 0);
+  const co2SavedTons = (baselineGridImportKwh - newGridImportKwh) * CONFIG.emissions.gridKgCo2PerKwh / 1000;
+  const baselineOverloadKw = Math.max(0, peakBase - limitKw);
+  const newOverloadKw = Math.max(0, peakNew - limitKw);
+  const capexDeferralLakhs = Math.max(0, baselineOverloadKw - newOverloadKw) * CONFIG.capital.capexDeferralRsPerKwPeak / 100000;
   const solarKw = Array.isArray(plan.solarKw) ? plan.solarKw : [];
   const solarUsedKw = Array.isArray(plan.solarUsedKw) ? plan.solarUsedKw : [];
   const curtailedKw = solarKw.reduce((total, availableKw, step) =>
@@ -41,6 +47,8 @@ export function computeKpis(plan, baseline, ctx = {}) {
   return {
     peakKw: { baseline: peakBase, new: peakNew },
     peakReductionPct: peakBase > 0 ? +(100 * (peakBase - peakNew) / peakBase).toFixed(2) : 0,
+    co2SavedTons: +co2SavedTons.toFixed(3),
+    capexDeferralLakhs: +capexDeferralLakhs.toFixed(2),
     overloadHours: {
       baseline: overloadHours(baselineNetKw),
       new: overloadHours(netKw),
@@ -210,20 +218,28 @@ export function compute_kpis(baselines, ctx = {}) {
   const noControl = baselines['No Control'];
   const noControlNetKw = netLoadKw(noControl);
   const basePeakKw = peakKw(noControlNetKw);
-  const usableBatteryKwh = CONFIG.battery.capacityKwh * (CONFIG.battery.maxSoc - CONFIG.battery.minReserveSoc);
+  const usableBatteryKwh = ctx.usableBatteryKwh ?? CONFIG.battery.capacityKwh * (CONFIG.battery.maxSoc - CONFIG.battery.minReserveSoc);
+  const limitKw = ctx.limitKw ?? CONFIG.feeder.limitKw;
+  const stepHours = ctx.stepHours ?? STEP_HOURS;
   const results = {};
 
   for (const [name, result] of Object.entries(baselines)) {
     const netKw = netLoadKw(result);
     const newPeakKw = peakKw(netKw);
     const dischargeKwh = dischargedEnergyKwh(result);
+    const baselineImportKwh = noControlNetKw.reduce((sum, kw) => sum + Math.max(0, kw) * stepHours, 0);
+    const optimizedImportKwh = netKw.reduce((sum, kw) => sum + Math.max(0, kw) * stepHours, 0);
+    const baselineOverloadKw = Math.max(0, basePeakKw - limitKw);
+    const optimizedOverloadKw = Math.max(0, newPeakKw - limitKw);
 
     results[name] = {
       peakReductionPct: basePeakKw > 0 ? (basePeakKw - newPeakKw) / basePeakKw : 0,
-      overloadHours: netKw.filter((value) => value > CONFIG.feeder.limitKw).length * STEP_HOURS,
+      overloadHours: netKw.filter((value) => value > limitKw).length * stepHours,
       unservedEnergyKwh: unservedEnergyKwh(result, ctx),
       curtailmentKwh: curtailmentKwh(result),
       batteryCycles: usableBatteryKwh > 0 ? dischargeKwh / usableBatteryKwh : 0,
+      co2SavedTons: +((baselineImportKwh - optimizedImportKwh) * CONFIG.emissions.gridKgCo2PerKwh / 1000).toFixed(3),
+      capexDeferralLakhs: +(Math.max(0, baselineOverloadKw - optimizedOverloadKw) * CONFIG.capital.capexDeferralRsPerKwPeak / 100000).toFixed(2),
       discomfort: discomfortKwh(result, ctx),
       lossReductionDirectional: basePeakKw > 0 ? 1 - (newPeakKw / basePeakKw) ** 2 : 0,
       lossReductionLabel: LOSS_LABEL,
@@ -248,6 +264,12 @@ export function calculateKpis({
   const optimizedPeakKw = peakKw(optimizedNetKw);
   const baselineOverloadKw = Math.max(0, baselinePeakKw - feederCapacityKw);
   const optimizedOverloadKw = Math.max(0, optimizedPeakKw - feederCapacityKw);
+  const baselineGridImportKwh = baselineNetKw.reduce((sum, kw) => sum + Math.max(0, kw) * CONFIG.timing.stepHours, 0);
+  const optimizedGridImportKwh = optimizedNetKw.reduce((sum, kw) => sum + Math.max(0, kw) * CONFIG.timing.stepHours, 0);
+  const co2SavedTons = (baselineGridImportKwh - optimizedGridImportKwh)
+    * CONFIG.emissions.gridKgCo2PerKwh / 1000;
+  const deferredPeakKw = Math.max(0, baselineOverloadKw - optimizedOverloadKw);
+  const capexDeferralLakhs = deferredPeakKw * CONFIG.capital.capexDeferralRsPerKwPeak / 100000;
   const baselineDailyCost = costFor(baselineNetKw, feederCapacityKw);
   const optimizedDailyCost = costFor(optimizedNetKw, feederCapacityKw);
 
@@ -261,8 +283,8 @@ export function calculateKpis({
       ? Number(((baselinePeakKw - optimizedPeakKw) / baselinePeakKw * 100).toFixed(1))
       : 0,
     dailySavingsRs: Math.round(baselineDailyCost - optimizedDailyCost),
-    co2SavedTons: null,
-    capexDeferralLakhs: null,
+    co2SavedTons: Number(co2SavedTons.toFixed(3)),
+    capexDeferralLakhs: Number(capexDeferralLakhs.toFixed(2)),
     baselineDailyCostRs: Math.round(baselineDailyCost),
     optimizedDailyCostRs: Math.round(optimizedDailyCost),
     totalBessDischargedMWh: Number((plan.metrics.batteryDischargedKwh / KW_PER_MW).toFixed(2)),

@@ -15,6 +15,7 @@ import test from 'node:test';
 import { CONFIG } from '../src/engine/config.js';
 import { effectiveReserveSoc } from '../src/engine/dispatch.js';
 import {
+  calculateKpis,
   computeAllKpis,
   compute_cost,
   computeCost,
@@ -120,6 +121,8 @@ test('compute_kpis returns hand-verified comparisons against No Control', () => 
   const metrics = compute_kpis(baselines, { limitKw: 4200, stepHours: 0.5, usableBatteryKwh: 1125 });
 
   assert.equal(metrics.Combined.peakReductionPct, 10);
+  assert.equal(metrics.Combined.co2SavedTons, 0.675);
+  assert.equal(metrics.Combined.capexDeferralLakhs, 47.5);
   assert.deepEqual(metrics.Combined.overloadHours, { baseline: 0.5, new: 0.5 });
   assert.equal(metrics.Combined.unservedEnergyKwh, 2.5);
   assert.equal(metrics.Combined.curtailmentKwh, 10);
@@ -144,6 +147,8 @@ test('computeKpis compares direct plan arrays and computeAllKpis uses No Control
   const result = computeKpis(plan, baseline, ctx);
 
   assert.equal(result.peakReductionPct, 10);
+  assert.equal(result.co2SavedTons, 0.675);
+  assert.equal(result.capexDeferralLakhs, 47.5);
   assert.deepEqual(result.overloadHours, { baseline: 0.5, new: 0.5 });
   assert.equal(result.unservedEnergyKwh, 2.5);
   assert.equal(result.curtailmentKwh, 10);
@@ -154,14 +159,28 @@ test('computeKpis compares direct plan arrays and computeAllKpis uses No Control
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
 });
 
-test('cost uses configured tariffs and overload penalties; unknown capex stays unset', () => {
+test('engine KPIs compute CO2 savings and feeder capex deferral from sourced factors', () => {
+  const metrics = calculateKpis({
+    baselineNetKw: [5000],
+    optimizedNetKw: [4500],
+    baselineVoltage: [1],
+    optimizedVoltage: [1],
+    feederCapacityMW: 4.2,
+    plan: { metrics: { batteryDischargedKwh: 0, shiftedKwh: 0 } },
+    timeSeries: [{ hasViolation: false }],
+  });
+
+  assert.equal(metrics.co2SavedTons, 0.169);
+  assert.equal(metrics.capexDeferralLakhs, 47.5);
+});
+test('cost uses configured tariffs and overload penalties; sourced capex defaults from data', () => {
   const result = compute_cost({ netKw: [1000, 5000] });
 
   assert.equal(result.energyCostRs, 1950);
   assert.equal(result.overloadPenaltyRs, 1160);
   assert.equal(result.operatingCostRs, 3110);
-  assert.equal(result.capexRs, null);
-  assert.equal(result.incentiveRs, null);
+  assert.equal(result.capexRs, 33000000);
+  assert.equal(result.incentiveRs, 0);
   assert.equal(result.paybackYears, null);
   assert.equal(result.status, 'NEEDS_INPUT');
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result);

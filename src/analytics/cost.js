@@ -109,9 +109,17 @@ export function compute_cost({
     total + Math.max(0, loadKw - limitKw) * CONFIG.penalties.overloadRsPerKwSlot,
   0);
 
-  // PROTOTYPE ASSUMPTION: financial inputs stay unset until explicitly supplied.
-  const resolvedCapexRs = capexRs ?? null;
-  const resolvedIncentiveRs = incentiveRs ?? null;
+  // Explicit caller values override the sourced dataset defaults.
+  const resolvedCapexRs = capexRs !== undefined
+    ? capexRs
+    : CONFIG.battery.capexRsPerKwh == null
+      ? null
+      : CONFIG.battery.capexRsPerKwh * CONFIG.battery.capacityKwh;
+  const resolvedIncentiveRs = incentiveRs !== undefined
+    ? incentiveRs
+    : CONFIG.incentive.rsPerKwhShifted == null
+      ? null
+      : CONFIG.incentive.rsPerKwhShifted * shiftedEnergyKwh;
   const validCapex = resolvedCapexRs == null || (Number.isFinite(resolvedCapexRs) && resolvedCapexRs >= 0);
   const validIncentive = resolvedIncentiveRs == null
     || (Number.isFinite(resolvedIncentiveRs) && resolvedIncentiveRs >= 0);

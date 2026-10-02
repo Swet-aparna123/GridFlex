@@ -1,0 +1,482 @@
+[
+    {
+        "time":  "00:00",
+        "slot_index":  0,
+        "household_fan_cooler":  0.5569,
+        "household_pump_fridge":  0.3,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "00:30",
+        "slot_index":  1,
+        "household_fan_cooler":  0.5802,
+        "household_pump_fridge":  0.3,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "01:00",
+        "slot_index":  2,
+        "household_fan_cooler":  0.5949,
+        "household_pump_fridge":  0.3,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "01:30",
+        "slot_index":  3,
+        "household_fan_cooler":  0.6,
+        "household_pump_fridge":  0.3,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "02:00",
+        "slot_index":  4,
+        "household_fan_cooler":  0.5949,
+        "household_pump_fridge":  0.3001,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "02:30",
+        "slot_index":  5,
+        "household_fan_cooler":  0.5802,
+        "household_pump_fridge":  0.3005,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "03:00",
+        "slot_index":  6,
+        "household_fan_cooler":  0.5569,
+        "household_pump_fridge":  0.3022,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "03:30",
+        "slot_index":  7,
+        "household_fan_cooler":  0.5269,
+        "household_pump_fridge":  0.3076,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "04:00",
+        "slot_index":  8,
+        "household_fan_cooler":  0.4928,
+        "household_pump_fridge":  0.3224,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "04:30",
+        "slot_index":  9,
+        "household_fan_cooler":  0.4572,
+        "household_pump_fridge":  0.356,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "05:00",
+        "slot_index":  10,
+        "household_fan_cooler":  0.4231,
+        "household_pump_fridge":  0.4186,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "05:30",
+        "slot_index":  11,
+        "household_fan_cooler":  0.3931,
+        "household_pump_fridge":  0.5126,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "06:00",
+        "slot_index":  12,
+        "household_fan_cooler":  0.3698,
+        "household_pump_fridge":  0.6224,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "06:30",
+        "slot_index":  13,
+        "household_fan_cooler":  0.3551,
+        "household_pump_fridge":  0.714,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "07:00",
+        "slot_index":  14,
+        "household_fan_cooler":  0.35,
+        "household_pump_fridge":  0.75,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "07:30",
+        "slot_index":  15,
+        "household_fan_cooler":  0.3551,
+        "household_pump_fridge":  0.714,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "08:00",
+        "slot_index":  16,
+        "household_fan_cooler":  0.3698,
+        "household_pump_fridge":  0.6224,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "08:30",
+        "slot_index":  17,
+        "household_fan_cooler":  0.3931,
+        "household_pump_fridge":  0.5126,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "09:00",
+        "slot_index":  18,
+        "household_fan_cooler":  0.4231,
+        "household_pump_fridge":  0.4186,
+        "household_higher_consumption":  0.25,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "09:30",
+        "slot_index":  19,
+        "household_fan_cooler":  0.4572,
+        "household_pump_fridge":  0.356,
+        "household_higher_consumption":  0.2922,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "10:00",
+        "slot_index":  20,
+        "household_fan_cooler":  0.4928,
+        "household_pump_fridge":  0.3224,
+        "household_higher_consumption":  0.3338,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "10:30",
+        "slot_index":  21,
+        "household_fan_cooler":  0.5269,
+        "household_pump_fridge":  0.3076,
+        "household_higher_consumption":  0.3741,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "11:00",
+        "slot_index":  22,
+        "household_fan_cooler":  0.5569,
+        "household_pump_fridge":  0.3022,
+        "household_higher_consumption":  0.4127,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "11:30",
+        "slot_index":  23,
+        "household_fan_cooler":  0.5802,
+        "household_pump_fridge":  0.3005,
+        "household_higher_consumption":  0.4488,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "12:00",
+        "slot_index":  24,
+        "household_fan_cooler":  0.595,
+        "household_pump_fridge":  0.3001,
+        "household_higher_consumption":  0.4821,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "12:30",
+        "slot_index":  25,
+        "household_fan_cooler":  0.6001,
+        "household_pump_fridge":  0.3,
+        "household_higher_consumption":  0.512,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "13:00",
+        "slot_index":  26,
+        "household_fan_cooler":  0.5952,
+        "household_pump_fridge":  0.3,
+        "household_higher_consumption":  0.5381,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "13:30",
+        "slot_index":  27,
+        "household_fan_cooler":  0.5809,
+        "household_pump_fridge":  0.3002,
+        "household_higher_consumption":  0.56,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "14:00",
+        "slot_index":  28,
+        "household_fan_cooler":  0.5588,
+        "household_pump_fridge":  0.3007,
+        "household_higher_consumption":  0.5776,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "14:30",
+        "slot_index":  29,
+        "household_fan_cooler":  0.5316,
+        "household_pump_fridge":  0.3022,
+        "household_higher_consumption":  0.5908,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "15:00",
+        "slot_index":  30,
+        "household_fan_cooler":  0.5031,
+        "household_pump_fridge":  0.3064,
+        "household_higher_consumption":  0.6001,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "15:30",
+        "slot_index":  31,
+        "household_fan_cooler":  0.4781,
+        "household_pump_fridge":  0.3164,
+        "household_higher_consumption":  0.607,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "16:00",
+        "slot_index":  32,
+        "household_fan_cooler":  0.462,
+        "household_pump_fridge":  0.3369,
+        "household_higher_consumption":  0.6138,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "16:30",
+        "slot_index":  33,
+        "household_fan_cooler":  0.4601,
+        "household_pump_fridge":  0.3734,
+        "household_higher_consumption":  0.6243,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "17:00",
+        "slot_index":  34,
+        "household_fan_cooler":  0.4757,
+        "household_pump_fridge":  0.4288,
+        "household_higher_consumption":  0.6434,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "17:30",
+        "slot_index":  35,
+        "household_fan_cooler":  0.5091,
+        "household_pump_fridge":  0.4994,
+        "household_higher_consumption":  0.6745,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "18:00",
+        "slot_index":  36,
+        "household_fan_cooler":  0.5562,
+        "household_pump_fridge":  0.5726,
+        "household_higher_consumption":  0.7178,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  0.25
+    },
+    {
+        "time":  "18:30",
+        "slot_index":  37,
+        "household_fan_cooler":  0.609,
+        "household_pump_fridge":  0.6288,
+        "household_higher_consumption":  0.767,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  1
+    },
+    {
+        "time":  "19:00",
+        "slot_index":  38,
+        "household_fan_cooler":  0.6576,
+        "household_pump_fridge":  0.65,
+        "household_higher_consumption":  0.8096,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  1
+    },
+    {
+        "time":  "19:30",
+        "slot_index":  39,
+        "household_fan_cooler":  0.6931,
+        "household_pump_fridge":  0.6288,
+        "household_higher_consumption":  0.8293,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  1
+    },
+    {
+        "time":  "20:00",
+        "slot_index":  40,
+        "household_fan_cooler":  0.7108,
+        "household_pump_fridge":  0.5726,
+        "household_higher_consumption":  0.8127,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  1
+    },
+    {
+        "time":  "20:30",
+        "slot_index":  41,
+        "household_fan_cooler":  0.7112,
+        "household_pump_fridge":  0.4994,
+        "household_higher_consumption":  0.7546,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  1
+    },
+    {
+        "time":  "21:00",
+        "slot_index":  42,
+        "household_fan_cooler":  0.699,
+        "household_pump_fridge":  0.4288,
+        "household_higher_consumption":  0.6613,
+        "small_shop":  0.8,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  1
+    },
+    {
+        "time":  "21:30",
+        "slot_index":  43,
+        "household_fan_cooler":  0.681,
+        "household_pump_fridge":  0.3734,
+        "household_higher_consumption":  0.5472,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.15,
+        "critical_load":  1
+    },
+    {
+        "time":  "22:00",
+        "slot_index":  44,
+        "household_fan_cooler":  0.6627,
+        "household_pump_fridge":  0.3369,
+        "household_higher_consumption":  0.4297,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "22:30",
+        "slot_index":  45,
+        "household_fan_cooler":  0.6471,
+        "household_pump_fridge":  0.3164,
+        "household_higher_consumption":  0.3646,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "23:00",
+        "slot_index":  46,
+        "household_fan_cooler":  0.6339,
+        "household_pump_fridge":  0.3064,
+        "household_higher_consumption":  0.3161,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    },
+    {
+        "time":  "23:30",
+        "slot_index":  47,
+        "household_fan_cooler":  0.6208,
+        "household_pump_fridge":  0.3022,
+        "household_higher_consumption":  0.2845,
+        "small_shop":  0.475,
+        "e_rickshaw_charging":  0.85,
+        "critical_load":  1
+    }
+]

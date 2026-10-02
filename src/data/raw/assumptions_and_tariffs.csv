@@ -1,0 +1,13 @@
+key,value,note
+tariff_peak_rs_per_kwh,9.5,17:00-22:00 evening peak tariff slab
+tariff_offpeak_rs_per_kwh,4.0,10:00-15:00 solar-hours off-peak tariff slab
+tariff_normal_rs_per_kwh,6.5,all other hours
+battery_capex_rs_per_kwh,22000,"typical Indian BESS installed cost, ₹/kWh (verify current quote)"
+battery_cycle_life,4000,typical LFP cycle life to 80% DoD
+grid_co2_factor_kg_per_kwh,0.82,"CEA all-India grid emission factor, approx (verify latest CEA baseline)"
+capex_deferral_rs_per_kw_peak,9500,illustrative avoided/deferred feeder upgrade cost per kW of peak shaved
+incentive_rs_per_kwh_shifted,2.0,illustrative consumer incentive for participating in a shift event
+battery_round_trip_efficiency,0.94,assumed charge/discharge efficiency
+feeder_capacity_mw,4.2,"simulated feeder thermal rating, matches engine default"
+battery_capacity_mwh,1.5,"shared community battery, matches engine default"
+battery_max_power_mw,0.75,shared community battery max charge/discharge rate
